@@ -24,6 +24,8 @@ var tools: HelmetTools
 var lake: LakeWater            # flood the crater (I): the ancient lake in 3D
 var tower: LayerTower          # TOWER: the data layers lift off the terrain as a stack
 var live: LiveLink             # the helmet's live link to the habitat console (web planner)
+var radar: RadarCurtain        # Shift+J: Perseverance's ground radar hung under its track (Jezero)
+var then_now: ThenNow          # Shift+P: the rover's photo where it was taken, wiped against the render
 var callouts: Callouts
 var alerts: Alerts
 var lightbox: Lightbox
@@ -323,6 +325,14 @@ func _build_ui() -> void:
 	lake.level_changed.connect(func(lv: float):
 		if is_finite(lv) and str(_overlay_layer.get("id", "")) == "lake":
 			_on_overlay(_overlay_layer, true))   # the draped depth map follows the water
+	radar = RadarCurtain.new()
+	radar.name = "RadarCurtain"
+	world.add_child(radar)
+	radar.setup(world, func(t: String, k: String): alerts.toast(t, k))
+	then_now = ThenNow.new()
+	then_now.name = "ThenNow"
+	add_child(then_now)
+	then_now.setup(self, world, func(t: String, k: String): alerts.toast(t, k))
 	tower = LayerTower.new()
 	tower.name = "LayerTower"
 	world.add_child(tower)
@@ -1450,6 +1460,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_mode("orbit" if world.mode == "walk" else "walk")
 	elif event.is_action_pressed("jump") and world.mode != "walk":
 		Mission.set_playing(not Mission.playing)   # Space plays the EVA in orbit view (it jumps in the helmet)
+	elif event.is_action_pressed("then_now", false, true):
+		then_now.next()
 	elif event.is_action_pressed("play_pause"):
 		if world.mode == "walk":
 			_walk_play_toggle()
@@ -1478,6 +1490,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		world.set_grid(world._param("grid_strength") < 0.5)
 	elif event.is_action_pressed("labels"):
 		world.set_layer_visible("labels", not world.show_labels)
+	elif event.is_action_pressed("radar", false, true):
+		radar.toggle()
 	elif event.is_action_pressed("ping"):
 		world.scan_pulse(world.walker.xy() if world.mode == "walk" else Geo.xy_of(world.orbit.target))
 	elif event.is_action_pressed("help"):
@@ -1543,6 +1557,9 @@ func _trailer() -> void:
 	var L := lake.levels()
 	if not L.is_empty() and bool(L[0].get("published", false)):
 		await _trailer_lake()
+	if radar.available():
+		await _trailer_radar()
+	await _trailer_then_now()
 	await _wait(1.0)
 	_trailer_mark("end")
 	await _wait(0.5)
@@ -1583,6 +1600,78 @@ func _trailer_lake() -> void:
 	await _wait(2.5)
 	world.set_layer_visible("labels", labels_were)
 	_fade_plan_ui(true)
+
+
+## Under the rover's track: Perseverance's ground radar unrolls into the ground, seen from orbit.
+func _trailer_radar() -> void:
+	if world.mode != "orbit":
+		_set_mode("orbit")
+		await _wait(1.2)
+	var shot: Dictionary = await radar_viewpoint()
+	if shot.is_empty():
+		return
+	var labels_were := world.show_labels
+	world.set_layer_visible("labels", false)
+	_fade_plan_ui(false)
+	world.orbit.fly_to(world.td.world_at(shot["xy"]), 420.0, float(shot["yaw"]), deg_to_rad(21.0), 2.6)
+	director.caption("Under the rover's track", "Perseverance's RIMFAX radar sounded the ground every 10 cm as it drove. Each sol's radargram hangs along that sol's drive, 5 m down (drawn 2.5 times deeper from orbit).")
+	await _wait(2.4)
+	radar.set_on(true, true)
+	var waited := 0.0
+	while radar._mi == null and waited < 60.0:
+		await _wait(0.5)
+		waited += 0.5
+	await _wait(RadarCurtain.REVEAL_S + 4.0)
+	director.caption("Buried layers and rocks", "Light and dark bands are echoes from layer boundaries; the chevrons are echoes off buried boulders. Data: NASA PDS, Mars 2020 RIMFAX.")
+	world.orbit.fly_to(world.td.world_at(shot["xy"]), 260.0, float(shot["yaw"]) + 0.5, deg_to_rad(14.0), 5.0)
+	await _wait(6.0)
+	director.hide_caption()
+	radar.set_on(false, true)
+	await _wait(1.5)
+	world.set_layer_visible("labels", labels_were)
+	_fade_plan_ui(true)
+
+
+## Then and now: one of the rover's photos, wiped against the terrain model from the pose it was taken at.
+func _trailer_then_now() -> void:
+	director.hide_caption()
+	then_now.next()
+	var waited := 0.0
+	while not then_now.active and waited < 60.0:
+		await _wait(0.5)
+		waited += 0.5
+	if not then_now.active:
+		return
+	await _wait(ThenNow.SWEEP_S + 1.5)
+	then_now.stop()
+	await _wait(1.2)
+
+
+## A place to look at the radar curtain from: the middle of its longest run, seen side-on. {xy, yaw} or {}.
+func radar_viewpoint() -> Dictionary:
+	if not radar.available():
+		return {}
+	if radar.runs.is_empty():
+		var r: Dictionary = await Api.get_json("/api/sites/%s/radar" % Mission.site_id, 60.0)
+		if not r["ok"] or not (r["data"] is Dictionary):
+			return {}
+		radar.runs = (r["data"] as Dictionary).get("runs", [])
+	var best: Dictionary = {}
+	for run in radar.runs:
+		if best.is_empty() or int(run["n"]) > int(best["n"]):
+			best = run
+	if best.is_empty():
+		return {}
+	var lon: Array = best["lon"]
+	var lat: Array = best["lat"]
+	var n := lon.size()
+	var a := Mission.xy_of(float(lon[int(n * 0.35)]), float(lat[int(n * 0.35)]))
+	var b := Mission.xy_of(float(lon[int(n * 0.65)]), float(lat[int(n * 0.65)]))
+	var mid := Mission.xy_of(float(lon[n / 2]), float(lat[n / 2]))
+	var along := (b - a).normalized()
+	# the camera looks across the track: its heading is the track's direction turned by 90 degrees
+	var yaw := atan2(along.x, along.y) + PI * 0.5
+	return {"xy": mid, "yaw": yaw}
 
 
 func _trailer_mark(name: String) -> void:
@@ -1656,6 +1745,14 @@ func _capture_tour() -> void:
 		return
 	if tour == "live":
 		await ToolsTour.new(self).run_live()
+		get_tree().quit()
+		return
+	if tour == "radar":
+		await ToolsTour.new(self).run_radar()
+		get_tree().quit()
+		return
+	if tour == "thennow":
+		await ToolsTour.new(self).run_thennow()
 		get_tree().quit()
 		return
 	if tour == "trailer":

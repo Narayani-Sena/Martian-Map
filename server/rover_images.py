@@ -143,9 +143,13 @@ def landscapes(mission: str, sol_from: int, sol_to: int, per_page: int = 60) -> 
             dim = _triple(ext.get("dimension")) or [0, 0]
             inst = str((it.get("camera") or {}).get("instrument") or "")
             if url and "NAVCAM" in inst.upper():
+                cam = it.get("camera") or {}
                 out.append({"id": it.get("imageid"), "sol": it.get("sol"), "instrument": inst, "camera": camera_name(inst),
                             "title": it.get("title"), "url": url, "thumb": files.get("small") or url,
-                            "date_taken": it.get("date_taken_utc"), "el": el, "w": dim[0], "h": dim[1]})
+                            "date_taken": it.get("date_taken_utc"), "el": el, "w": dim[0], "h": dim[1],
+                            # the pose (feature E3): waypoint, rover attitude, camera model in the delivered image's pixels
+                            "site": it.get("site"), "drive": it.get("drive"), "attitude": it.get("attitude"),
+                            "cahv": cam.get("camera_model_component_list")})
     else:
         params = {"order": "sol desc,instrument_sort asc,sample_type_sort asc, date_taken desc", "per_page": per_page, "page": 0,
                   "condition_1": f"{mission}:mission", "condition_2": f"{sol_from}:sol:gte", "condition_3": f"{sol_to}:sol:lte",
@@ -156,11 +160,17 @@ def landscapes(mission: str, sol_from: int, sol_to: int, per_page: int = 60) -> 
             v = _triple(it.get("camera_vector"))
             el = math.degrees(math.asin(max(-1.0, min(1.0, -v[2])))) if v and len(v) == 3 else None  # rover frame: +z down
             rect = _triple(it.get("subframe_rect")) or [0, 0, 0, 0]
+            try:
+                scale = max(1.0, float(it.get("scale_factor") or 1))
+            except (TypeError, ValueError):
+                scale = 1.0
             if url:
                 out.append({"id": it.get("imageid"), "sol": it.get("sol"), "instrument": it.get("instrument"),
                             "camera": camera_name(it.get("instrument")), "title": it.get("title"), "url": url,
                             "thumb": thumb_url(url), "date_taken": it.get("date_taken"), "el": el,
-                            "w": rect[2] if len(rect) > 2 else 0, "h": rect[3] if len(rect) > 3 else 0})
+                            "w": int(rect[2] / scale) if len(rect) > 2 else 0, "h": int(rect[3] / scale) if len(rect) > 3 else 0,
+                            "site": it.get("site"), "drive": it.get("drive"), "attitude": it.get("attitude"),
+                            "cahv": it.get("camera_model_component_list")})
     good = [x for x in out if x["el"] is not None and -25.0 <= x["el"] <= 8.0]
     good.sort(key=lambda x: (abs(x["el"] + 8.0) > 10.0, -(x["w"] or 0), abs(x["el"] + 8.0)))
     return good

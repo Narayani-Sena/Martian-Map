@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import queue
+import threading
 import time
+from concurrent.futures import Future
 from pathlib import Path
 
 import requests
@@ -88,3 +91,46 @@ def gdal_http_env() -> dict:
         "VSI_CACHE": "TRUE",
         "VSI_CACHE_SIZE": str(256 * 1024 * 1024),
     }
+
+
+class DaemonPool:
+    """A small thread pool whose workers never hold up the interpreter's exit.
+
+    concurrent.futures' pools join their workers when Python exits, so one feed that answers slowly (a request's
+    timeout is per socket read, not in total) kept the server, or a test run, from shutting down. These workers are
+    daemon threads: at exit an unfinished fetch is simply dropped. submit() returns an ordinary Future."""
+
+    def __init__(self, workers: int, name: str):
+        self._q: queue.SimpleQueue = queue.SimpleQueue()
+        self._n, self._name = workers, name
+        self._started = False
+        self._lock = threading.Lock()
+
+    def _start(self):
+        with self._lock:
+            if self._started:
+                return
+            for i in range(self._n):
+                threading.Thread(target=self._run, name=f"{self._name}_{i}", daemon=True).start()
+            self._started = True
+
+    def submit(self, fn, *args, **kwargs) -> Future:
+        self._start()
+        f: Future = Future()
+        self._q.put((f, fn, args, kwargs))
+        return f
+
+    def map(self, fn, items) -> list:
+        """Run fn over items on the pool and wait for all of them (results in order)."""
+        futs = [self.submit(fn, x) for x in items]
+        return [f.result() for f in futs]
+
+    def _run(self):
+        while True:
+            f, fn, args, kwargs = self._q.get()
+            if not f.set_running_or_notify_cancel():
+                continue
+            try:
+                f.set_result(fn(*args, **kwargs))
+            except BaseException as e:  # noqa: BLE001 - handed to the waiting caller
+                f.set_exception(e)

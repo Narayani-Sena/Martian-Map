@@ -26,6 +26,7 @@ var earth_light := false
 var hear_on := true
 var pace_s := NAN                # + ahead of the ghost, - behind (s)
 var note := ""                   # the next pace note, for the HUD
+var along := NAN                 # metres along the route where the walker is (the cuff strip map)
 var look := Vector2.INF          # site xy where EV1 looks
 
 var _ghost: Node3D
@@ -166,6 +167,7 @@ func _process(delta: float) -> void:
 		_update_note()
 	else:
 		note = ""
+		along = NAN
 
 
 func _update_ghost(delta: float, walk: bool) -> void:
@@ -193,6 +195,7 @@ func _update_ghost(delta: float, walk: bool) -> void:
 func _update_note() -> void:
 	var st := Mission.state_at(Mission.eva_t)
 	var me := _route_distance(world.walker.xy(), float(st["d"]))
+	along = me
 	if not is_finite(me) or _notes.is_empty():
 		note = ""
 		return
@@ -210,6 +213,11 @@ func _update_note() -> void:
 			CW.say(str(n["text"]))   # the co-driver: each note read aloud once
 		break
 	note = txt
+
+
+## The co-driver's notes on the whole route ({d, text}, sorted by d), for the cuff strip map.
+func notes() -> Array:
+	return _notes
 
 
 ## F1: Geiger clicks follow the dose rate; over high science ground a detector chirps, faster as it rises.

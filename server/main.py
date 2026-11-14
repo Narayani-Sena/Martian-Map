@@ -51,6 +51,8 @@ from . import scout as scoutlib
 from . import tags as tagslib
 from . import debrief as debrieflib
 from . import export3d
+from . import radar as radarlib
+from . import thennow as thennowlib
 from . import patch as patchlib
 from . import postcard as postcardlib
 from . import rover as pr
@@ -476,6 +478,7 @@ def site_info(site_id: str):
         "sand": meta.get("sand"), "terrain_confidence": meta.get("terrain_confidence"),
         "ingenuity": meta.get("ingenuity"), "has_horizon": s.horizon is not None,
         "chemistry": meta.get("chemistry"),
+        "radar": meta.get("radar"),
         "files": files,
         "built_utc": meta.get("built_utc"),
         "defaults": {"walk": WalkParams().to_dict(), "suit": eva.SuitParams().to_dict(), "start_utc": _default_start(g.lon0).isoformat()},
@@ -1786,6 +1789,69 @@ def chemistry(site_id: str, lon: float | None = None, lat: float | None = None, 
         ts = sorted((t for t in ts if t["dist_from_m"] <= within_m), key=lambda t: t["dist_from_m"])[:n]
     return {**{k: v for k, v in doc.items() if k != "targets"}, "hints": [{"oxide": k, "min_wt": thr, "hint": lb, "color": c}
             for k, thr, lb, c in CHEM_HINTS], "targets": ts}
+
+
+@app.get("/api/sites/{site_id}/radar")
+def radar(site_id: str, lon: float | None = None, lat: float | None = None,
+          within_m: float = Query(25.0, gt=0, le=1000)):
+    """Ground-penetrating radar under the rover's track (feature E1): Perseverance's RIMFAX radargrams, each sol's
+    laid along that sol's drive. Runs carry a position (and DTM height) per 0.5 m column. With lon/lat: only the
+    nearest column within `within_m` ("what is under here")."""
+    s = _site(site_id)
+    doc = s.radar
+    if not doc:
+        note = ("No ground radar here: of the two rovers, only Perseverance carries one (RIMFAX)."
+                if s.cfg.get("mission") != "M20" else "No RIMFAX radargrams inside this site in the archive yet.")
+        return {"runs": [], "note": note}
+    base = radarlib.summary(doc)
+    if lon is not None and lat is not None:
+        return {**base, "nearest": radarlib.nearest(doc, s.grid, lon, lat, within_m)}
+    return {**base, "runs": doc["runs"]}
+
+
+_thennow_memo: dict = {}
+
+
+@app.get("/api/sites/{site_id}/then-now")
+def then_now(site_id: str):
+    """Then and now (feature E3): the rover's navigation-camera views inside the site, each with the pose it was
+    taken from (camera position and height, view direction, the frame's up, field of view), so the 3D console can
+    stand a camera there and wipe between the photo and the terrain model."""
+    s = _site(site_id)
+    hit = _thennow_memo.get(site_id)
+    if hit and time.time() - hit[0] < 3600 and hit[1].get("photos"):
+        return hit[1]
+    doc = thennowlib.photos(s)
+    _thennow_memo[site_id] = (time.time(), doc)
+    return doc
+
+
+@app.get("/api/sites/{site_id}/radar/atlas.png")
+def radar_atlas(site_id: str):
+    """All radargrams of the site in one 8-bit image (128 = zero; strips of `atlas.strip_h` rows), for the 3D curtain."""
+    s = _site(site_id)
+    p = s.dir / "radar_atlas.png"
+    if not p.exists():
+        raise HTTPException(404, "no radar for this site")
+    return FileResponse(p, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/api/sites/{site_id}/radar/run/{run}.png")
+def radar_run_png(site_id: str, run: int, gray: bool = False):
+    """One run's radargram (distance along the drive across, depth down), coloured: warm and cool for the two
+    signs of a reflection, dark where the radar returns nothing."""
+    s = _site(site_id)
+    doc, atlas = s.radar, s.radar_atlas
+    if not doc or atlas is None:
+        raise HTTPException(404, "no radar for this site")
+    r = next((r for r in doc["runs"] if r["run"] == run), None)
+    if r is None:
+        raise HTTPException(404, "no such radar run")
+    cols = radarlib.run_columns(doc, atlas, r)
+    img = Image.fromarray(cols, "L") if gray else Image.fromarray(radarlib.palette(cols), "RGB")
+    buf = io.BytesIO()
+    img.save(buf, "PNG", optimize=False)
+    return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api/sites/{site_id}/lake/mask.png")

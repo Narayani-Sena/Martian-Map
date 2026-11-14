@@ -4,7 +4,7 @@ const LS_KEY = (siteId) => `martian-map:mission:${siteId}`
 
 export const DEFAULT_VECTORS = {
   route: true, stops: true, rings: true, traverse: true, waypoints: false, contours: false,
-  shelters: true, refuges: false, labels: false, relays: true, ingenuity: true, suggestions: true, grid: false, chemistry: false,
+  shelters: true, refuges: false, labels: false, relays: true, ingenuity: true, suggestions: true, grid: false, chemistry: false, radar: false,
 }
 
 export const useStore = create((set, get) => ({
@@ -22,6 +22,7 @@ export const useStore = create((set, get) => ({
   base: 'hirise',
   layers: {}, // id -> { on, opacity }
   vectors: { ...DEFAULT_VECTORS },
+  radarView: null, // ground radar viewer (feature E1): { run, i } and the column under the cursor
   tool: 'select', // select | add-stop | move-hab | add-relay | measure
   quality: 'medium', // low | medium | high (3D)
   drape: 'none', // overlay draped on the 3D terrain

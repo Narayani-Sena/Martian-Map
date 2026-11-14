@@ -11,6 +11,12 @@ NASA Space Apps Challenge 2026 · Challenge:
 |---|---|
 | ![Orbit view](godot/docs/orbit_planning.jpg) | ![Helmet HUD](godot/docs/helmet_hud_alert.jpg) |
 
+| Layer tower: the data lifts off the terrain | Flood the crater: Jezero's ancient lake |
+|---|---|
+| ![Layer tower](godot/docs/layer_tower.jpg) | ![Flood the crater](godot/docs/flood_the_crater.jpg) |
+| **Under the rover's track:** Perseverance's ground radar | **Then and now:** the rover's photo against our terrain |
+| ![Radar curtain](godot/docs/radar_curtain.jpg) | ![Then and now](godot/docs/then_and_now.jpg) |
+
 ## Summary
 
 NASA's global tools, such as Mars Trek and the USGS-NASA geologic maps, show Mars region by region. A crew on a
@@ -30,12 +36,12 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 | A map, tool or interface a Mars astronaut could use on a surface mission | A web planner for the habitat (desktop or tablet), a native 3D console with a first-person helmet HUD, and an Apollo-style printable traverse sheet and cuff checklist |
 | A science goal and a place to explore | Two real sites: the boxwork ridges of Mount Sharp in Gale crater, which Curiosity studied in 2025, and Perseverance's Three Forks sample depot in Jezero crater |
 | Data from several NASA science missions, layered together | MRO (HiRISE, CTX, CRISM), Mars Odyssey (THEMIS), Curiosity, Perseverance, Ingenuity, NASA DONKI space weather, USGS geologic maps and ESA's HRSC terrain, in more than 20 map layers |
-| At least three kinds of data | Topographic, optical, thermal (night and day), spectral (minerals), chemical (rover laser chemistry), geologic, atmospheric, radiation and space weather |
+| At least three kinds of data | All eight the brief names: topographic, optical, thermal (night and day), spectral (minerals), chemical (rover laser chemistry), geophysical (ground-penetrating radar), atmospheric and radiation, plus geologic maps and space weather |
 | Astronaut safety first | Walk-back time from every point, consumable margins, caution and warning built to NASA-STD-3001, radio coverage, terrain shadow and sunset, CME arrival windows, and tools for when something fails |
 | Spacesuit mobility and carried equipment | Walking speed from Tobler's hiking function, scaled for a suited astronaut; speed and metabolic rate depend on the load carried |
 | A route that avoids obstacles such as large rocks | Our own boulder detector on 25 cm HiRISE images finds about 4,400 boulders at Gale and 11,500 on Jezero's floor; boulders of 2 m or more are no-go, smaller ones cost time |
 | Space weather and radiation | NASA DONKI's predicted CME arrivals at Mars are checked against the time in suits; Curiosity RAD dose rates; terrain shielding; a solar-storm drill |
-| Point-of-view imagery | Arrival postcards that put a view rendered from the terrain beside the rover's own photo of the same ground, Curiosity, Perseverance and Ingenuity photos at the places they were taken, and a first-person walk over the real terrain |
+| Point-of-view imagery | Then and now: the rover's own photos wiped against our terrain model from the exact pose they were taken at; arrival postcards that put a view rendered from the terrain beside the rover's photo of the same ground; Curiosity, Perseverance and Ingenuity photos at the places they were taken; and a first-person walk over the real terrain |
 | Rovers and astronauts working in pairs | A pressurized rover (PR-2) as transport, safe haven and radio relay, and a two-person EVA with partner-down rescue times |
 
 ## What it does
@@ -135,9 +141,18 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
   Planetary Data System: 462 ChemCam targets at Gale and 204 SuperCam targets at Jezero, as pins with oxide bars
   (SiO₂, FeO, MgO, CaO and more). Each pin sits where the rover stood that sol, and the point inspector shows the
   nearest targets, so a stop says what its rock is made of.
+* **Under the rover's track.** Perseverance's RIMFAX ground-penetrating radar sounded the ground every 10 cm as it
+  drove. 53 sols of its radargrams (7 km of track inside the Jezero site, from the NASA Planetary Data System) are laid
+  along the drives: click a track in the web planner to see 5 m down, with the cursor following on the map, or press
+  Shift+J in the 3D console to hang them under the track as a curtain you see through the ground. Light and dark bands
+  are buried layer boundaries; the chevrons are echoes off buried rocks.
 
 ### Take it with you
 
+* **Then and now.** Press Shift+P in the 3D console to stand exactly where the rover's navigation camera stood,
+  looking where it looked (from the camera model and rover attitude in NASA's raw-image feeds), and wipe between the
+  rover's photo and our terrain model rendered from the same spot. It shows what the crew will see there, and how
+  well the map matches the real ground.
 * **Arrival postcards.** For each stop, the view a few steps before arriving, rendered from the HiRISE terrain and
   colour for the arrival time and sun (with Mount Sharp on the horizon at Gale), beside the rover's own navigation-
   camera photo from the nearest place it stood.
@@ -160,7 +175,7 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
   flashlight that shows a layer only where you look (O), synthetic vision with glowing contours and snow poles
   every 50 m for dust or flat light (N), Earth light (B), hazard and find tags where you look (T), co-driver pace
   notes read aloud, Geiger clicks from the dose rate and a detector tone over science ground, the HUD-failure drill
-  (U), the skyline fix (Y) and the ancient lake (I).
+  (U), the skyline fix (Y), the ancient lake (I), the ground radar curtain (Shift+J) and then-and-now (Shift+P).
 
 ## Built on NASA data
 
@@ -180,6 +195,7 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 | Curiosity ChemCam and Perseverance SuperCam (PDS Geosciences Node) | LIBS major-oxide compositions per target | Rover chemistry pins, point inspector |
 | Mangold et al. (2024) | Jezero lake levels | Flood-the-crater layer |
 | Perseverance SuperCam microphone (NASA/JPL-Caltech/LANL/CNES/CNRS/ISAE-Supaero) | Wind recording, sol 4 | The sound of Jezero |
+| Perseverance RIMFAX (PDS Geosciences Node; Hamran et al. 2020) | Calibrated ground-penetrating radar radargrams, 53 sols | Radar curtain under the rover's track |
 
 All of these are public products. The site pipeline downloads and caches them. All suit, walking and rover numbers
 are planning assumptions and are shown in the app.
@@ -195,8 +211,11 @@ are planning assumptions and are shown in the app.
   Mars24.
 * The default plans for both sites are GO. A pytest suite covers routing, the suit model, the rover, boulders, CRISM,
   weather, Mars time, the emergency tools, the lake, the exports and the site configs. The 3D console has scripted
-  check tours, including 25 NASA-standards checks and checks for every helmet tool, the lake, the layer tower and
-  the live link (`-- --tour=tools | lake | tower | live`).
+  check tours, including 25 NASA-standards checks and checks for every helmet tool, the lake, the layer tower, the
+  live link, the radar curtain and then-and-now (`-- --tour=tools | lake | tower | live | radar | thennow`).
+* Then and now is checked against the rovers' own headings: a frame's pointing from the camera model and attitude
+  agrees with the waypoint's heading plus the mast's azimuth to within a degree or two.
+* Each radar sol is kept only when its radargram's length matches the rover's drive that sol within 15 %.
 
 ## Sites
 
@@ -250,8 +269,7 @@ docs/           NASA standards notes
 ## Status
 
 Everything described above works and has been checked, in the web planner and in the 3D console. Still to come:
-the shrinking-world edge drawn in the helmet during the leak drill, and geophysical data, the one kind the brief
-names that the map does not use yet (Perseverance's RIMFAX ground-penetrating radar under the rover's track).
+the shrinking-world edge drawn in the helmet during the leak drill.
 
 ## Disclaimer
 

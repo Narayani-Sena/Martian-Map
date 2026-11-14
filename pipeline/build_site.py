@@ -35,7 +35,7 @@ DATA_DIR = ROOT / "data"
 log = logging.getLogger("pipeline")
 
 STEPS = ["dem", "regional", "derive", "team_dem", "skyview", "imagery", "thermal", "thermal_day", "crism", "geology", "boulders",
-         "sand", "confidence", "rover", "ingenuity", "chemistry", "science", "contours", "meta"]
+         "sand", "confidence", "rover", "ingenuity", "chemistry", "radar", "science", "contours", "meta"]
 
 ANALYSIS_FACTOR = 2  # analysis grid = 2 m
 HORIZON_FACTOR = 4  # horizon / shielding grid = 4 m
@@ -398,6 +398,22 @@ class Builder:
         if meta:
             self.meta["chemistry"] = meta
             log.info("chemistry: %d targets from %s", meta["n_targets"], ", ".join(meta["files"]))
+
+    def step_radar(self):
+        """Perseverance's RIMFAX ground radar under the rover's track (geophysical data; none at Gale)."""
+        if not self.need("radar.json") and "radar" in self.meta:
+            return
+        from . import radar
+        try:
+            meta = radar.build(self.out, self.cfg, self.grid, self.cache / "rimfax", team=self.meta.get("team_dem"),
+                               dem=self.dem())
+        except Exception as e:  # offline: the site still builds without it
+            log.warning("radar step skipped: %s", e)
+            return
+        if meta:
+            self.meta["radar"] = meta
+            log.info("radar: %d sols, %.0f m of track in %d pieces (%d sols left out)", meta["sols"],
+                     meta["length_m"], meta["pieces"], meta["skipped"])
 
     def step_rover(self):
         rv = self.cfg["rover"]

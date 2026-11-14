@@ -63,6 +63,8 @@ export const api = {
   skylineCheck: (id, params) => j(`/api/sites/${id}/skyline/check?${qs(params)}`),
   gridLines: (id) => j(`/api/sites/${id}/grid-lines`),
   chemistry: (id, q) => j(`/api/sites/${id}/chemistry${q ? `?${qs(q)}` : ''}`),
+  radar: (id, q) => j(`/api/sites/${id}/radar${q ? `?${qs(q)}` : ''}`),
+  radarRunUrl: (id, run) => `/api/sites/${id}/radar/run/${run}.png`,
   pathHome: (id, params, signal) => j(`/api/sites/${id}/ways-home/path?${qs(params)}`, { signal }),
   file: (id, name) => `/api/sites/${id}/files/${name}`,
   tileUrl: (id, layer, params = {}) => {

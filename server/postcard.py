@@ -20,6 +20,7 @@ from PIL import Image
 
 from marsgeo import mars24
 from marsgeo.grid import sample_bilinear
+from marsgeo.net import DaemonPool
 
 MARS_R = 3389500.0
 EYE_M = 1.7
@@ -364,9 +365,11 @@ def _nearest_rover_sols(site, lon: float, lat: float):
     return {"sol": sol, "sol_end": max(sol, min((nxt or sol) - 1, sol + 2)), "distance_m": float(dist[k])}
 
 
+_photo_pool = DaemonPool(2, "postcard-photo")
+
+
 def rover_photo(site, lon: float, lat: float, budget: Budget) -> dict | None:
     """The rover's own photo from the waypoint nearest the stop, or None if the feed is slow or empty."""
-    from concurrent.futures import ThreadPoolExecutor
     from concurrent.futures import TimeoutError as FutTimeout
 
     from . import rover_images
@@ -374,9 +377,8 @@ def rover_photo(site, lon: float, lat: float, budget: Budget) -> dict | None:
     near = _nearest_rover_sols(site, lon, lat)
     if not mission or not near or budget.left() <= 0.2:
         return None
-    pool = ThreadPoolExecutor(max_workers=1)
-    fut = pool.submit(rover_images.landscapes, mission, near["sol"], near["sol_end"])
-    pool.shutdown(wait=False)  # a slow feed finishes in the background and is cached for next time
+    fut = _photo_pool.submit(rover_images.landscapes, mission, near["sol"], near["sol_end"])
+    # a slow feed finishes in the background (on daemon threads) and is cached for next time
     try:
         items = fut.result(timeout=budget.left())
     except (FutTimeout, Exception):

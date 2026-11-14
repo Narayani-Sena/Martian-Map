@@ -15,11 +15,10 @@ import json
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from marsgeo.net import get_json
+from marsgeo.net import DaemonPool, get_json
 
 API = "https://api.nasa.gov/DONKI"
 CACHE = Path(__file__).resolve().parents[1] / "data" / "cache" / "donki"
@@ -45,7 +44,7 @@ def _parse(ts: str | None):
 _fail_until: dict[str, float] = {}
 _memo: dict = {"t": 0.0, "data": None}
 _memo_lock = threading.Lock()
-_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="donki")
+_pool = DaemonPool(3, "donki")   # a slow DONKI must never keep the server (or a test run) from exiting
 FEED_WAIT_S = 25.0  # never keep a client waiting longer than this for one feed
 MEMO_S = 600.0
 
@@ -199,7 +198,7 @@ def _cache_age_min():
 # Weather 16, 1245). Nobody scores them at Mars, where a CME has further to travel, so the planner treats every
 # predicted arrival as a window of +/- 12 h around the forecast.
 ARRIVAL_UNCERTAINTY_H = 12.0
-_plan_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="donki-plan")
+_plan_pool = DaemonPool(1, "donki-plan")
 _plan_job = {"f": None}
 
 

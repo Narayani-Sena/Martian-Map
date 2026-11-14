@@ -10,6 +10,7 @@ import RightPanel from './components/RightPanel.jsx'
 import BottomDrawer from './components/BottomDrawer.jsx'
 import PrintChecklist from './components/PrintChecklist.jsx'
 import TowerView from './components/TowerView.jsx'
+import RadarView from './components/RadarView.jsx'
 
 const Scene3D = lazy(() => import('./components/Scene3D.jsx'))
 
@@ -161,6 +162,7 @@ export default function App() {
             <div className="stage">
               {planLoading && <div className="loading-bar" />}
               {mode === 'plan' && <MapView />}
+              {mode === 'plan' && <RadarView />}
               {mode === 'tower' && <TowerView />}
               {(mode === '3d' || mode === 'walk') && (
                 <Suspense fallback={<div className="splash" style={{ zIndex: 1 }}><div className="inner"><div className="planet" /><div className="muted">Building the 3D scene…</div></div></div>}>

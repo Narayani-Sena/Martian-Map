@@ -124,6 +124,31 @@ function Uncertainty({ plan }) {
   )
 }
 
+// What lies under this point: the nearest column of Perseverance's ground radar (feature E1).
+function RadarNearby({ info }) {
+  const site = useStore((s) => s.site)
+  const set = useStore((s) => s.set)
+  const [d, setD] = React.useState(null)
+  React.useEffect(() => {
+    setD(null)
+    if (!site?.radar || !info?.inside || info.loading) return undefined
+    let alive = true
+    api.radar(site.id, { lon: info.lon, lat: info.lat, within_m: 40 }).then((r) => { if (alive) setD(r) }).catch(() => {})
+    return () => { alive = false }
+  }, [site?.id, site?.radar, info?.lon, info?.lat, info?.inside, info?.loading])
+  const n = d?.nearest
+  if (!n) return null
+  return (
+    <div style={{ marginTop: 8, fontSize: 12 }}>
+      <span className="muted">Under the ground: </span>
+      {site.rover_name}'s radar passed {n.dist_m < 2 ? 'here' : `${Math.round(n.dist_m)} m away`} on sol {n.sol}.{' '}
+      <button className="btn sm" onClick={() => { if (!useStore.getState().vectors.radar) useStore.getState().toggleVector('radar'); set({ radarView: { run: n.run, i: n.i, cursor: n.i } }) }}>
+        See {Math.round(d.depth_m)} m down
+      </button>
+    </div>
+  )
+}
+
 // What the rocks near this point are made of: the rover's chemistry at its closest targets (feature E2).
 function ChemNearby({ info }) {
   const site = useStore((s) => s.site)
@@ -145,7 +170,7 @@ function ChemNearby({ info }) {
           <ChemBars t={t} />
         </div>
       ))}
-      <div className="muted" style={{ fontSize: 10.5 }}>Each target sits where Curiosity stood that sol (ChemCam reaches about 7 m).</div>
+      <div className="muted" style={{ fontSize: 10.5 }}>Each target sits where {d.rover || 'the rover'} stood that sol ({(d.instrument || 'the laser').split(' ')[0]} reaches about 7 m).</div>
     </div>
   )
 }
@@ -188,6 +213,7 @@ function PointInfo() {
           <ul className="issues" style={{ marginTop: 6 }}>{info.science_info.reasons.map((r, k) => <li key={k}><Info size={13} color="var(--accent)" /><span>{r.text}</span></li>)}</ul>
         )}
         <ChemNearby info={info} />
+        <RadarNearby info={info} />
         {info.inside && info.geology?.interpretation && (
           <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>{info.geology.interpretation} <i>({info.geology.map}, {info.geology.scale})</i></div>
         )}

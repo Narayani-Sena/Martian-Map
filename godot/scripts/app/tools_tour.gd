@@ -317,6 +317,123 @@ func run_tower() -> void:
 	print("tower tour: %d passed, %d failed" % [_pass, _fail])
 
 
+## E1 (--tour=radar): Perseverance's radargrams hang under its track, from orbit and from the track itself.
+func run_radar() -> void:
+	var boot := 0.0
+	while not Mission.has_plan() and boot < 240.0:
+		await m._wait(0.5)
+		boot += 0.5
+	await m._await_plan()
+	await m._wait(1.0)
+	Mission.set_playing(false)
+	var rc: RadarCurtain = m.radar
+	if not rc.available():
+		_check("T21", false, "this site has no ground radar (run it at jezero_threeforks)")
+		print("radar tour: %d passed, %d failed" % [_pass, _fail])
+		return
+	var shot: Dictionary = await m.radar_viewpoint()
+	var w: MarsWorld = m.world
+	m._set_mode("orbit")
+	await m._wait(1.0)
+	w.set_layer_visible("labels", false)
+	w.orbit.fly_to(w.td.world_at(shot["xy"]), 420.0, float(shot["yaw"]), deg_to_rad(21.0), 0.1)
+	var t0 := Time.get_ticks_msec()
+	rc.set_on(true)
+	var waited := 0.0
+	while rc._mi == null and waited < 90.0:
+		await m._wait(0.25)
+		waited += 0.25
+	var load_s := (Time.get_ticks_msec() - t0) / 1000.0
+	await m._wait(RadarCurtain.REVEAL_S + 1.0)
+	await m._shot("t17_radar_orbit.png")
+	var atlas: Dictionary = rc.doc.get("atlas", {})
+	_check("T21", rc.on and rc._mi != null and rc._mi.visible and rc.n_cols > 5000 and rc.tex_size == Vector2i(int(atlas.get("w", 0)), int(atlas.get("h", 0)))
+		and absf(float(rc._mat.get_shader_parameter("reveal")) - 1.0) < 0.01 and absf(float(rc._mat.get_shader_parameter("depth_scale")) - RadarCurtain.ORBIT_SCALE) < 0.01,
+		"%d runs, %d columns (%.1f km) from %d sols, atlas %dx%d, built in %.1f s" % [rc.runs.size(), rc.n_cols, rc.n_cols * float(rc.doc.get("col_m", 0.2)) / 1000.0,
+		(rc.doc.get("sols", []) as Array).size(), rc.tex_size.x, rc.tex_size.y, load_s])
+	w.orbit.fly_to(w.td.world_at(shot["xy"]), 240.0, float(shot["yaw"]) + 0.5, deg_to_rad(13.0), 0.1)
+	await m._wait(1.5)
+	await m._shot("t18_radar_low.png")
+	# in the helmet, a few metres beside the track, looking along it
+	var near := rc.nearest(shot["xy"])
+	m._set_mode("walk")
+	await m._wait(1.5)
+	w.walker.autopilot = false
+	var run: Dictionary = near.get("run", {})
+	var lon: Array = run.get("lon", [])
+	var lat: Array = run.get("lat", [])
+	var i := int(near.get("i", 0))
+	var p0 := Mission.xy_of(float(lon[i]), float(lat[i]))
+	var j := mini(i + 60, lon.size() - 1)
+	var p1 := Mission.xy_of(float(lon[j]), float(lat[j]))
+	var dir := (p1 - p0).normalized()
+	var side := Vector2(dir.y, -dir.x)
+	var stand := p0 - dir * 6.0 + side * 3.0
+	w.walker.place(stand, rad_to_deg(atan2(p1.x - stand.x, p1.y - stand.y)))
+	w.walker.pitch = -0.32
+	await m._wait(1.5)
+	await m._shot("t19_radar_helmet.png")
+	_check("T22", absf(float(rc._mat.get_shader_parameter("depth_scale")) - 1.0) < 0.01 and float(near.get("dist_m", 99.0)) < 30.0,
+		"in the helmet: true depth (%.1f m), standing 3 m beside sol %d's track" % [float(rc.doc.get("depth_m", 0.0)), int(near.get("sol", 0))])
+	rc.set_on(false)
+	await m._wait(1.2)
+	_check("T23", not rc.on and not rc._mi.visible, "the curtain is gone again")
+	m._set_mode("orbit")
+	await m._wait(1.0)
+	print("radar tour: %d passed, %d failed" % [_pass, _fail])
+
+
+## E3 (--tour=thennow): the rover's own photos, each from the pose it was taken at, wiped against the render.
+func run_thennow() -> void:
+	var boot := 0.0
+	while not Mission.has_plan() and boot < 240.0:
+		await m._wait(0.5)
+		boot += 0.5
+	await m._await_plan()
+	await m._wait(1.0)
+	Mission.set_playing(false)
+	var tn: ThenNow = m.then_now
+	var w: MarsWorld = m.world
+	await tn.next()
+	var waited := 0.0
+	while not tn.active and waited < 60.0:
+		await m._wait(0.25)
+		waited += 0.25
+	await m._wait(2.0)
+	tn.split = 0.5
+	tn._hold_until = Time.get_ticks_msec() / 1000.0 + 30.0
+	await m._wait(0.5)
+	await m._shot("t20_then_now.png")
+	var p: Dictionary = tn.current
+	var cam_ok: bool = tn._cam != null and tn._cam.current and tn._cam.global_position.distance_to(
+		Vector3(w.walker.xy().x, tn._cam.global_position.y, -w.walker.xy().y)) < 1.0
+	var look := -tn._cam.global_transform.basis.z if tn._cam else Vector3.ZERO
+	var d: Array = p.get("dir", [0, 0, 0])
+	var want := Vector3(float(d[0]), float(d[1]), float(d[2])).normalized()
+	_check("T24", tn.active and tn.photos.size() >= 6 and tn.tex != null and cam_ok and look.angle_to(want) < 0.01 and not m.hud.visible,
+		"%d photos; sol %s %s at %s, looking %.0f° / %+.0f°, %.0f° wide; camera on the pose" % [tn.photos.size(), str(p.get("sol", "?")),
+		str(p.get("camera", "")), str(p.get("rmc", "")), float(p.get("az", 0.0)), float(p.get("el", 0.0)), float(p.get("hfov", 0.0))])
+	var idx0 := tn.idx
+	var tex0 := tn.tex
+	tn.next()
+	waited = 0.0
+	while tn.tex == tex0 and waited < 40.0:
+		await m._wait(0.25)
+		waited += 0.25
+	await m._wait(2.5)
+	tn.split = 0.5
+	await m._wait(0.3)
+	await m._shot("t21_then_now_next.png")
+	_check("T25", tn.idx == (idx0 + 1) % tn.photos.size() and tn.active and str(tn.current.get("id", "")) != str(p.get("id", "-")),
+		"the next photo: sol %s, %s, looking %.0f°" % [str(tn.current.get("sol", "?")), str(tn.current.get("rmc", "")), float(tn.current.get("az", 0.0))])
+	tn.stop()
+	await m._wait(1.0)
+	_check("T26", not tn.active and w.camera.current and not tn._layer.visible, "back to the console's own view")
+	m._set_mode("orbit")
+	await m._wait(1.0)
+	print("then-now tour: %d passed, %d failed" % [_pass, _fail])
+
+
 ## A4 flood the crater: the water rises to the first level; the lake bed and the helmet readout follow it.
 func _lake_checks() -> void:
 	var w: MarsWorld = m.world

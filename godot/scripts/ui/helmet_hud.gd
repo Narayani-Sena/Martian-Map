@@ -743,6 +743,10 @@ func _fill_cuff(cs: Dictionary, working: bool, left: float) -> void:
 			Sfx.play("toggle", -6.0))
 		_cuff_box.add_child(row)
 	_cuff_box.add_child(_txt("click or press 1–%d to tick" % mini(tasks.size(), 5), 10, HUD_DIM))
+	if not working and tools != null:   # walking to the station: the route ahead, unrolled (D3)
+		var strip := CuffStrip.new()
+		strip.tools = tools
+		_cuff_box.add_child(strip)
 
 
 func toggle_cuff_task(i: int) -> void:

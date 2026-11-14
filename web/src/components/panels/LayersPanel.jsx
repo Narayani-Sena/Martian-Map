@@ -87,6 +87,7 @@ export default function LayersPanel() {
     ['suggestions', 'Suggested science stops'],
     ['grid', 'Radio grid (250 m squares, “Kilo seven”)'],
     ...(site.chemistry ? [['chemistry', `Rover chemistry: ${site.chemistry.instrument}, ${site.chemistry.n_targets} targets`]] : []),
+    ...(site.radar ? [['radar', `Ground radar: RIMFAX under ${site.rover_name}'s track, ${site.radar.sols} sols, ${(site.radar.length_m / 1000).toFixed(1)} km`]] : []),
   ]
 
   return (

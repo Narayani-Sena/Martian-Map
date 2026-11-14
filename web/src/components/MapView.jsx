@@ -112,7 +112,7 @@ export default function MapView() {
     m.createPane('vectors').style.zIndex = 420
     m.createPane('flow').style.zIndex = 432
     m.createPane('route').style.zIndex = 440
-    for (const k of ['contours', 'traverse', 'waypoints', 'rings', 'route', 'compare', 'markers', 'measure', 'hover', 'extras', 'heli', 'suggest', 'flow', 'pathHome', 'skyfix', 'grid', 'ideas', 'envelope', 'rescue', 'caches', 'live', 'smart', 'chem'])
+    for (const k of ['contours', 'traverse', 'waypoints', 'rings', 'route', 'compare', 'markers', 'measure', 'hover', 'extras', 'heli', 'suggest', 'flow', 'pathHome', 'skyfix', 'grid', 'ideas', 'envelope', 'rescue', 'caches', 'live', 'smart', 'chem', 'radar', 'radarCursor'])
       groups.current[k] = L.layerGroup().addTo(m)
 
     m.on('mousemove', (e) => setCursor({ lon: e.latlng.lng, lat: e.latlng.lat }))
@@ -459,13 +459,58 @@ export default function MapView() {
       for (const t of d.targets) {
         const tip = `<b>${t.name}</b> · sol ${t.sol} · ${d.instrument}, ${t.n_points} point${t.n_points === 1 ? '' : 's'}${t.dist_m ? ` at ${t.dist_m.toFixed(1)} m` : ''}`
           + `<br><span style="color:${t.color}">●</span> ${t.hint} · oxides, weight %${chemBarsHtml(t)}`
-          + `<span style="opacity:.7">Placed where Curiosity stood on sol ${t.sol} (ChemCam reaches ~7 m)</span>`
+          + `<span style="opacity:.7">Placed where ${d.rover || 'the rover'} stood on sol ${t.sol} (${(d.instrument || 'the laser').split(' ')[0]} reaches ~7 m)</span>`
         L.circleMarker([t.lat, t.lon], { pane: 'vectors', radius: 4.5, color: '#1a0f08', weight: 1.2, fillColor: t.color, fillOpacity: 0.95, bubblingMouseEvents: false })
           .bindTooltip(tip, { className: 'mm-tip', direction: 'top' }).addTo(g)
       }
     }).catch(() => {})
     return () => { alive = false }
   }, [st.vectors.chemistry, site])
+
+  // ------------------------------------------------------------------ ground radar under the rover's track (feature E1)
+  const radarRuns = useRef([])
+  useEffect(() => {
+    const g = groups.current.radar
+    g.clearLayers()
+    radarRuns.current = []
+    if (!st.vectors.radar || !site.radar) return undefined
+    let alive = true
+    api.radar(site.id).then((d) => {
+      if (!alive) return
+      radarRuns.current = d.runs
+      for (const r of d.runs) {
+        const ll = r.lon.map((lon, k) => [r.lat[k], lon])
+        const tip = `<b>Ground radar</b> · sol ${r.sol} (${r.utc}) · ${Math.round(r.n * d.col_m)} m<br>`
+          + `<span style="opacity:.75">What lies ${Math.round(d.depth_m)} m down under ${site.rover_name}'s wheels. Click to see it.</span>`
+        const open = (e) => {
+          L.DomEvent.stop(e)
+          let best = 0, bd = Infinity
+          for (let k = 0; k < r.n; k++) {
+            const dd = (r.lat[k] - e.latlng.lat) ** 2 + ((r.lon[k] - e.latlng.lng) * Math.cos(r.lat[k] * Math.PI / 180)) ** 2
+            if (dd < bd) { bd = dd; best = k }
+          }
+          useStore.getState().set({ radarView: { run: r.run, i: best, cursor: best } })
+        }
+        L.polyline(ll, { pane: 'vectors', color: '#04121a', weight: 7, opacity: 0.55, interactive: false }).addTo(g)
+        L.polyline(ll, { pane: 'vectors', color: '#7fe3ff', weight: 3.2, opacity: 0.95, bubblingMouseEvents: false })
+          .bindTooltip(tip, { className: 'mm-tip', direction: 'top', sticky: true }).on('click', open).addTo(g)
+      }
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [st.vectors.radar, site])
+
+  // the column under the radargram viewer's cursor, on the map
+  useEffect(() => {
+    const g = groups.current.radarCursor
+    g.clearLayers()
+    const v = st.radarView
+    if (!v) return
+    const r = radarRuns.current.find((x) => x.run === v.run)
+    if (!r) return
+    const k = Math.max(0, Math.min(r.n - 1, v.cursor ?? v.i))
+    L.polyline(r.lon.map((lon, j) => [r.lat[j], lon]), { pane: 'vectors', color: '#ffffff', weight: 5, opacity: 0.35, interactive: false }).addTo(g)
+    L.circleMarker([r.lat[k], r.lon[k]], { pane: 'vectors', radius: 7, color: '#04121a', weight: 2, fillColor: '#ffc46e', fillOpacity: 1, interactive: false }).addTo(g)
+  }, [st.radarView, st.vectors.radar])
 
   // ------------------------------------------------------------------ Ingenuity's flights (Jezero)
   useEffect(() => {

@@ -310,6 +310,22 @@ class Site:
         return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
     @cached_property
+    def radar(self) -> dict | None:
+        """Perseverance's RIMFAX radargrams along the rover's track, grouped into runs, or None (feature E1)."""
+        p = self.dir / "radar.json"
+        if not p.exists():
+            return None
+        from . import radar as radarlib
+        doc = json.loads(p.read_text(encoding="utf-8"))
+        doc["runs"] = radarlib.group_runs(doc)
+        return doc
+
+    @cached_property
+    def radar_atlas(self) -> np.ndarray | None:
+        p = self.dir / "radar_atlas.png"
+        return np.asarray(Image.open(p).convert("L")) if p.exists() else None
+
+    @cached_property
     def regional(self):
         p = self.dir / "regional_200m.tif"
         if not p.exists():
