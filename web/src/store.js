@@ -4,7 +4,7 @@ const LS_KEY = (siteId) => `martian-map:mission:${siteId}`
 
 export const DEFAULT_VECTORS = {
   route: true, stops: true, rings: true, traverse: true, waypoints: false, contours: false,
-  shelters: true, refuges: false, labels: false, relays: true, ingenuity: true, suggestions: true, grid: false,
+  shelters: true, refuges: false, labels: false, relays: true, ingenuity: true, suggestions: true, grid: false, chemistry: false,
 }
 
 export const useStore = create((set, get) => ({
@@ -67,6 +67,8 @@ export const useStore = create((set, get) => ({
   autoplan: null, // Plan it for me results (feature C3)
   apPreview: null, // which of its EVAs is drawn on the map
   scout: null, // Scout first: shaky stretches and the helicopter flight (C1)
+  earthWalk: null, // walk it on Earth (F3): {on, sim, anchor, mars, acc, track, walked, wb}
+  light: (() => { try { return localStorage.getItem('martian-map:light') || 'mars' } catch { return 'mars' } })(), // geologist's white balance (G6)
   tags: [], // crew tags (C2)
   tagKey: '', // changes when a hazard tag changes routing
   sketch: null, // Beat the planner: {points, result} (G3)
@@ -149,6 +151,7 @@ export const useStore = create((set, get) => ({
       suit: { ...site.defaults.suit },
       startUtc: site.defaults.start_utc,
       rover: { enabled: false, dropoff: null },
+      crew: ['EV1', 'EV2'],
     }
     set({ caches: [], ...base, ...(saved || {}), layers, plan: null, compare: null, selectedStop: null, walkT: 0, pointInfo: null, suggestions: null, heliFlight: null, cmeDrill: null, waysHome: null, pathHome: null, skyFix: null, envelope: null, rescueCheck: null, cacheSuggest: null, lakeLevel: null, autoplan: null, apPreview: null, scout: null, sketch: null })
   },
@@ -156,7 +159,7 @@ export const useStore = create((set, get) => ({
     const s = get()
     if (!s.siteId) return
     const keep = { habitat: s.habitat, stops: s.stops, relays: s.relays, radio: s.radio, walk: s.walk, suit: s.suit,
-      algorithm: s.algorithm, astarWeight: s.astarWeight, returnToHab: s.returnToHab, rover: s.rover, caches: s.caches }
+      algorithm: s.algorithm, astarWeight: s.astarWeight, returnToHab: s.returnToHab, rover: s.rover, caches: s.caches, crew: s.crew }
     try { localStorage.setItem(LS_KEY(s.siteId), JSON.stringify(keep)) } catch { /* private mode */ }
   },
   resetMission() {
@@ -192,6 +195,7 @@ export const missionBody = (s) => ({
   sep_active: s.sepActive,
   ...(s.cmeDrill ? { cme_arrivals: [{ arrival: s.cmeDrill, glancing: false, cme: 'DRILL' }] } : {}),
   rover: { enabled: !!s.rover?.enabled, dropoff: s.rover?.enabled ? s.rover.dropoff || null : null },
+  crew: (s.crew || []).filter((n) => n && n.trim()).slice(0, 4),
 })
 
 // Where the walking loop starts and ends: the hab, or PR-2 parked at its drop-off.

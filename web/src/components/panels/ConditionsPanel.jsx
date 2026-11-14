@@ -1,9 +1,32 @@
 import React from 'react'
-import { AlertTriangle, ExternalLink, Radiation, Siren, Sun, Sunrise, Sunset } from 'lucide-react'
+import { AlertTriangle, AudioLines, ExternalLink, Radiation, Siren, Sun, Sunrise, Sunset } from 'lucide-react'
 import { useStore } from '../../store.js'
 import XYChart, { Legend } from '../charts/XYChart.jsx'
 import { hms } from '../../lib/mars24.js'
 import { fmtNum, fmtUtc } from '../../lib/format.js'
+
+// The sound of the site (feature E4): Perseverance carries microphones, so Jezero's wind is real audio. Curiosity has
+// none, so Gale's wind has never been heard; the panel says so rather than inventing one.
+const SITE_SOUNDS = {
+  jezero_threeforks: {
+    src: '/audio/jezero_wind_sol004.mp3',
+    caption: "Wind at Jezero, recorded by Perseverance's SuperCam microphone on sol 4 (22 February 2021), with the mast raised and the rover's own noise removed. Listen around 20 s for the strongest gust.",
+    credit: 'NASA/JPL-Caltech/LANL/CNES/CNRS/ISAE-Supaero',
+  },
+}
+
+function SiteSound({ site }) {
+  const snd = SITE_SOUNDS[site.id]
+  if (!snd) {
+    return <p className="hint" style={{ marginTop: 0 }}>{site.rover_name || 'This rover'} carries no microphone, so the wind here has never been recorded. Switch to Jezero to hear Perseverance's.</p>
+  }
+  return (
+    <>
+      <audio className="site-audio" controls loop preload="none" src={snd.src} aria-label="Recorded Martian wind" />
+      <p className="hint">{snd.caption} Real audio, not a simulation: {snd.credit}.</p>
+    </>
+  )
+}
 
 function Tile({ label, value, unit, sub }) {
   return (
@@ -142,6 +165,12 @@ export default function ConditionsPanel() {
         </button>
         <p className="hint"><Radiation size={11} style={{ verticalAlign: -1 }} /> The drill adds an SEP dose to the plan and triggers storm alerts in the helmet view.</p>
       </div>
+      {site && (
+        <div className="section">
+          <h3><span><AudioLines size={11} style={{ verticalAlign: -1 }} /> The sound of the site</span></h3>
+          <div className="card"><SiteSound site={site} /></div>
+        </div>
+      )}
     </>
   )
 }

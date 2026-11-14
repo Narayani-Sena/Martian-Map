@@ -419,12 +419,16 @@ input[type='checkbox'] { accent-color: var(--accent); }
   min-height: 0;
   z-index: 12;
 }
-.drawer-tabs { display: flex; align-items: center; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--line); }
+.drawer-tabs { display: flex; align-items: center; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--line);
+  overflow-x: auto; scrollbar-width: none; }
+.drawer-tabs::-webkit-scrollbar { display: none; }
 .drawer-tabs button {
   border: 0;
   background: transparent;
   color: var(--muted);
-  padding: 7px 12px 9px;
+  white-space: nowrap;
+  flex: none;
+  padding: 7px 11px 9px;
   font-weight: 600;
   font-size: 12px;
   cursor: pointer;
@@ -916,3 +920,58 @@ input.txt { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid
 .tag-pin { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 900 12px/1 var(--font); border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.6); }
 .tag-pin.hazard { background: #d62f4b; color: #fff; }
 .tag-pin.find { background: #3ccf3c; color: #062; }
+
+/* ------------------------------------------------------------------ strip map and pace notes (feature D3) */
+.strip-tab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 32%); gap: 14px; height: 100%; }
+.strip-main { display: grid; grid-template-rows: auto 1fr auto; gap: 4px; min-width: 0; }
+.strip-main select.input { background: #0b1017; border: 1px solid var(--line-2); border-radius: 8px; padding: 4px 6px; max-width: 260px; }
+.strip { position: relative; min-height: 124px; margin: 2px 8px 0 44px; cursor: crosshair; }
+.strip > * { position: absolute; }
+.strip-lab { left: -44px; font: 700 8.5px/1 var(--mono); color: var(--muted); letter-spacing: .06em; }
+.strip-band { left: 0; right: 0; border-radius: 3px; background: rgba(255, 255, 255, 0.04); overflow: hidden; }
+.strip-band i, .strip-road i { position: absolute; top: 0; bottom: 0; }
+.strip-road { left: 0; right: 0; top: 42px; height: 32px; border-radius: 5px; overflow: hidden;
+  background: linear-gradient(180deg, #2f3d4f, #243142); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.strip-road::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px dashed rgba(255, 255, 255, 0.35); }
+.strip-tick { top: 38px; height: 40px; border-left: 2px solid; transform: translateX(-1px); opacity: .9; }
+.strip-num { top: 44px; transform: translateX(-50%); min-width: 14px; height: 14px; border-radius: 7px; padding: 0 3px; background: #0b1017;
+  border: 1px solid rgba(255, 255, 255, 0.5); color: #fff; font: 800 8.5px/12px var(--mono); text-align: center; z-index: 1; }
+.strip-boulder { transform: translate(-50%, -50%); border-radius: 50%; background: #ff8a3d; border: 1.5px solid #ffd2b0; box-shadow: 0 0 6px rgba(255, 138, 61, 0.6); }
+.strip-turn { top: 88px; transform: translateX(-50%); color: #4fd1ff; font: 800 15px/1 var(--font); white-space: nowrap; }
+.strip-turn small { font: 600 9px var(--mono); margin-left: 1px; color: var(--text-2); }
+.strip-axis { top: 110px; transform: translateX(-50%); font: 500 9.5px var(--mono); color: var(--muted); white-space: nowrap; }
+.strip-axis::before { content: ''; position: absolute; left: 50%; top: -6px; height: 4px; border-left: 1px solid var(--line-2); }
+.strip-hover { top: 0; bottom: 14px; border-left: 2px solid #fff; box-shadow: 0 0 6px #fff; pointer-events: none; }
+.strip-num.low { top: 58px; }
+.strip-notes { margin: 0; padding: 0 4px 0 0; list-style: none; overflow: auto; font-size: 12px; }
+.strip-notes li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; padding: 4px 6px; border-radius: 6px; color: var(--text-2); cursor: default; }
+.strip-notes li:hover { background: var(--panel-2); color: var(--text-1); }
+.strip-notes li b { font: 800 10px/16px var(--mono); color: #fff; background: #0b1017; border: 1px solid var(--line-2); border-radius: 8px; text-align: center; height: 16px; }
+@media (max-width: 900px) { .strip-tab { grid-template-columns: 1fr; } .strip-notes { max-height: 90px; } }
+
+/* ------------------------------------------------------------------ mission patch (feature G1) */
+.patch-card { display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: center; }
+.patch-svg { width: 128px; height: 128px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 160, 80, 0.12), transparent 70%); }
+.patch-svg svg { width: 128px; height: 128px; display: block; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55)); }
+.patch-card .field { display: grid; gap: 4px; font-size: 11.5px; color: var(--text-2); }
+
+/* ------------------------------------------------------------------ geologist's white balance (feature G6) */
+.wb-earth .basemap, .wb-earth canvas.scene-canvas, .wb-earth .photo-grid img, .wb-earth .lightbox img,
+.wb-earth .tower-sheet img { filter: url(#wb-earth); }
+.light-toggle { color: #ffb37a; border-color: rgba(255, 140, 70, 0.45); }
+.light-toggle.earth { color: #9fd3ff; border-color: rgba(120, 190, 255, 0.55); background: rgba(70, 140, 220, 0.12); }
+
+/* ------------------------------------------------------------------ walk it on Earth (feature F3) */
+.earth-walker { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #0f3d2c; border: 2px solid #49e3a0;
+  box-shadow: 0 0 0 5px rgba(73, 227, 160, 0.25), 0 0 16px rgba(73, 227, 160, 0.8); animation: ew-pulse 1.6s ease-in-out infinite; }
+.earth-walker b { color: #c9ffe6; font: 800 8.5px/1 var(--font); letter-spacing: .04em; }
+@keyframes ew-pulse { 50% { box-shadow: 0 0 0 9px rgba(73, 227, 160, 0.08), 0 0 22px rgba(73, 227, 160, 0.9); } }
+
+/* ------------------------------------------------------------------ the sound of the site (feature E4) */
+.site-audio { width: 100%; height: 34px; color-scheme: dark; }
+
+/* rover chemistry (feature E2): oxide bars in tooltips and the point inspector */
+.chem-bars { display: grid; grid-template-columns: 40px minmax(60px, 1fr) 34px; gap: 2px 6px; align-items: center; font-size: 11px; margin: 4px 0 2px; min-width: 190px; }
+.chem-bars > span, .chem-bars span > span { color: var(--muted, #93a3b3); font-family: var(--mono, ui-monospace, monospace); }
+.chem-bars i { display: block; height: 6px; border-radius: 3px; min-width: 1px; }
+.chem-bars em { font-style: normal; text-align: right; font-family: var(--mono, ui-monospace, monospace); }

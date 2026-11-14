@@ -1,11 +1,15 @@
 # Launch the Martian Map EVA Console (Godot 4.7).
-#   .\run_godot.ps1                 # normal start (the app starts the API itself if it is not running)
-#   .\run_godot.ps1 -Quality high   # force a rendering preset: low | medium | high
-#   .\run_godot.ps1 -Editor         # open the project in the Godot editor instead
+#   .\run_godot.ps1                          # normal start (the app starts the API itself if it is not running)
+#   .\run_godot.ps1 -Quality high            # force a rendering preset: low | medium | high
+#   .\run_godot.ps1 -Site jezero_threeforks  # open another site
+#   .\run_godot.ps1 -Editor                  # open the project in the Godot editor instead
+#   .\run_godot.ps1 -Trailer [-Site <id>]    # record the hands-free demo to trailer\martian_map_<site>.mp4 (MP4 needs ffmpeg)
 # Set $env:GODOT to your Godot executable if it is not found automatically.
 param(
     [ValidateSet("", "low", "medium", "high")][string]$Quality = "",
-    [switch]$Editor
+    [switch]$Editor,
+    [switch]$Trailer,
+    [string]$Site = ""
 )
 $ErrorActionPreference = "Stop"
 $project = Join-Path $PSScriptRoot "godot"
@@ -28,10 +32,60 @@ if (-not (Test-Path (Join-Path $project ".godot\global_script_class_cache.cfg"))
     & $godot --headless --path $project --import | Out-Null
 }
 
+if ($Trailer) {
+    # Godot's movie writer renders every frame at a fixed 30 fps, so the video is smooth however fast the laptop is.
+    $out = Join-Path $PSScriptRoot "trailer"
+    New-Item -ItemType Directory -Force $out | Out-Null
+    $name = if ($Site) { "martian_map_$Site" } else { "martian_map_demo" }
+    $avi = Join-Path $out "$name.avi"
+    $shots = Join-Path $env:TEMP "martian_map_trailer"
+    New-Item -ItemType Directory -Force $shots | Out-Null
+    $marks = Join-Path $shots "trailer_marks.txt"
+    Remove-Item $marks -ErrorAction SilentlyContinue
+    Write-Host "Recording the demo (it runs slower than real time while it records)..."
+    $q = { param($v) '"' + $v + '"' }   # Start-Process passes one string: quote the paths with spaces
+    $argv = @("--path", (& $q $project), "--resolution", "1600x900", "--write-movie", (& $q $avi), "--fixed-fps", "30",
+        "--", (& $q "--capture=$shots"), "--tour=trailer")
+    if ($Site) { $argv += "--site=$Site" }
+    Start-Process -FilePath $godot -ArgumentList $argv -Wait   # the windowed exe returns at once unless we wait for it
+    $ff = Get-Command ffmpeg -ErrorAction SilentlyContinue
+    if ($ff -and (Test-Path $avi)) {
+        $mp4 = [IO.Path]::ChangeExtension($avi, ".mp4")
+        $enc = @("-c:v", "libx264", "-crf", "21", "-preset", "medium", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart")
+        # The app writes where the demo starts and ends (frames): keep 3 s of the title screen, then cut the loading out.
+        $t0 = $null; $t1 = $null
+        if (Test-Path $marks) {
+            foreach ($l in Get-Content $marks) {
+                $p = $l -split " "
+                if ($p[0] -eq "start") { $t0 = [double]$p[1] / 30.0 }
+                if ($p[0] -eq "end") { $t1 = [double]$p[1] / 30.0 }
+            }
+        }
+        if ($null -ne $t0 -and $null -ne $t1 -and $t1 -gt $t0) {
+            $inv = [Globalization.CultureInfo]::InvariantCulture
+            $s = $t0.ToString("0.###", $inv)
+            $e = $t1.ToString("0.###", $inv)
+            $fc = "[0:v]trim=0:3,setpts=PTS-STARTPTS[tv];[0:a]atrim=0:3,asetpts=PTS-STARTPTS[ta];" +
+                "[0:v]trim=start=${s}:end=${e},setpts=PTS-STARTPTS[dv];[0:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS[da];" +
+                "[tv][ta][dv][da]concat=n=2:v=1:a=1[v][a]"
+            & $ff.Source -y -loglevel error -i $avi -filter_complex $fc -map "[v]" -map "[a]" @enc $mp4
+        } else {
+            & $ff.Source -y -loglevel error -i $avi @enc $mp4
+        }
+        if (Test-Path $mp4) { Remove-Item $avi; Write-Host "Trailer: $mp4" }
+    } else {
+        Write-Host "Trailer: $avi (install ffmpeg for a small MP4)"
+    }
+    return
+}
+
 $gargs = @("--path", $project)
+$user = @()
+if ($Quality) { $user += "--quality=$Quality" }
+if ($Site) { $user += "--site=$Site" }
 if ($Editor) {
     $gargs = @("--editor") + $gargs
-} elseif ($Quality) {
-    $gargs += @("--", "--quality=$Quality")
+} elseif ($user.Count -gt 0) {
+    $gargs += @("--") + $user
 }
 & $godot @gargs

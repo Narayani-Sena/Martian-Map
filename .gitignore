@@ -14,6 +14,9 @@ godot/.godot/
 # Built and downloaded site data: rebuild with  python -m pipeline.build_site <site_id>
 data/
 
+# Recorded demo videos (run_godot.ps1 -Trailer)
+trailer/
+
 # Local files
 *.log
 .env

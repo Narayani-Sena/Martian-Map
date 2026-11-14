@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from marsgeo.net import get_json
@@ -108,3 +109,58 @@ def images(mission: str, sol_from: int, sol_to: int, per_page: int = 60) -> dict
             "caption": (it.get("caption") or "")[:300],
         })
     return {"mission": mission, "sol_from": sol_from, "sol_to": sol_to, "total": js.get("total"), "items": items}
+
+
+# ------------------------------------------------------------------ landscapes for the arrival postcards (feature G2)
+def _triple(v):
+    if isinstance(v, str):
+        try:
+            v = [float(x) for x in v.strip("() ").split(",")]
+        except ValueError:
+            return None
+    return list(v) if isinstance(v, (list, tuple)) and len(v) >= 2 else None
+
+
+def landscapes(mission: str, sol_from: int, sol_to: int, per_page: int = 60) -> list[dict]:
+    """Navigation-camera frames that look out over the terrain (pointing -25 to +8 deg), the best first.
+
+    The mast cameras spend much of their time on close-ups and calibration targets, so a postcard does better with
+    the navigation cameras, whose horizon strips and wide frames show the place as a walker would see it."""
+    out = []
+    if mission == "mars2020":
+        params = {"feed": "raw_images", "category": "mars2020", "feedtype": "json", "ver": "1.2", "num": 100, "page": 0,
+                  "order": "sol desc", "search": "|NAVCAM_LEFT|NAVCAM_RIGHT", "condition_2": f"{sol_from}:sol:gte",
+                  "condition_3": f"{sol_to}:sol:lte", "extended": "sample_type::full,"}
+        js = get_json(M20_API, cache_path=CACHE / f"mars2020_nav_{sol_from}_{sol_to}.json", ttl_s=24 * 3600, params=params, timeout=40)
+        for it in js.get("images", []):
+            files = it.get("image_files") or {}
+            url = files.get("large") or files.get("medium") or files.get("full_res")
+            ext = it.get("extended") or {}
+            try:
+                el = float(ext.get("mastEl"))
+            except (TypeError, ValueError):
+                el = None
+            dim = _triple(ext.get("dimension")) or [0, 0]
+            inst = str((it.get("camera") or {}).get("instrument") or "")
+            if url and "NAVCAM" in inst.upper():
+                out.append({"id": it.get("imageid"), "sol": it.get("sol"), "instrument": inst, "camera": camera_name(inst),
+                            "title": it.get("title"), "url": url, "thumb": files.get("small") or url,
+                            "date_taken": it.get("date_taken_utc"), "el": el, "w": dim[0], "h": dim[1]})
+    else:
+        params = {"order": "sol desc,instrument_sort asc,sample_type_sort asc, date_taken desc", "per_page": per_page, "page": 0,
+                  "condition_1": f"{mission}:mission", "condition_2": f"{sol_from}:sol:gte", "condition_3": f"{sol_to}:sol:lte",
+                  "search": "NAV_LEFT_B|NAV_RIGHT_B|NAV_LEFT_A|NAV_RIGHT_A", "extended": "thumbnail::sample_type::noteq"}
+        js = get_json(API, cache_path=CACHE / f"{mission}_nav_{sol_from}_{sol_to}.json", ttl_s=24 * 3600, params=params, timeout=40)
+        for it in js.get("items", []):
+            url = it.get("https_url") or it.get("url")
+            v = _triple(it.get("camera_vector"))
+            el = math.degrees(math.asin(max(-1.0, min(1.0, -v[2])))) if v and len(v) == 3 else None  # rover frame: +z down
+            rect = _triple(it.get("subframe_rect")) or [0, 0, 0, 0]
+            if url:
+                out.append({"id": it.get("imageid"), "sol": it.get("sol"), "instrument": it.get("instrument"),
+                            "camera": camera_name(it.get("instrument")), "title": it.get("title"), "url": url,
+                            "thumb": thumb_url(url), "date_taken": it.get("date_taken"), "el": el,
+                            "w": rect[2] if len(rect) > 2 else 0, "h": rect[3] if len(rect) > 3 else 0})
+    good = [x for x in out if x["el"] is not None and -25.0 <= x["el"] <= 8.0]
+    good.sort(key=lambda x: (abs(x["el"] + 8.0) > 10.0, -(x["w"] or 0), abs(x["el"] + 8.0)))
+    return good

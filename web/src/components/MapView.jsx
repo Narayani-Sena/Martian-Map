@@ -9,6 +9,7 @@ import { earthView, sendCommand } from '../lib/live.js'
 import { AP_COLORS } from './panels/SmartPanel.jsx'
 import { MARS_R, bearingDeg, compass, distanceM, interp } from '../lib/geo.js'
 import { fmtDist, fmtLonLat } from '../lib/format.js'
+import { chemBarsHtml } from './ChemBars.jsx'
 
 // Leaflet's Web-Mercator CRS with the Mars radius, so the scale bar and distances are Martian.
 const MarsCRS = L.extend({}, L.CRS.EPSG3857, { R: MARS_R })
@@ -111,7 +112,7 @@ export default function MapView() {
     m.createPane('vectors').style.zIndex = 420
     m.createPane('flow').style.zIndex = 432
     m.createPane('route').style.zIndex = 440
-    for (const k of ['contours', 'traverse', 'waypoints', 'rings', 'route', 'compare', 'markers', 'measure', 'hover', 'extras', 'heli', 'suggest', 'flow', 'pathHome', 'skyfix', 'grid', 'ideas', 'envelope', 'rescue', 'caches', 'live', 'smart'])
+    for (const k of ['contours', 'traverse', 'waypoints', 'rings', 'route', 'compare', 'markers', 'measure', 'hover', 'extras', 'heli', 'suggest', 'flow', 'pathHome', 'skyfix', 'grid', 'ideas', 'envelope', 'rescue', 'caches', 'live', 'smart', 'chem'])
       groups.current[k] = L.layerGroup().addTo(m)
 
     m.on('mousemove', (e) => setCursor({ lon: e.latlng.lng, lat: e.latlng.lat }))
@@ -395,7 +396,14 @@ export default function MapView() {
       L.marker([a.lat, a.lon], { pane: 'route', zIndexOffset: 1230, icon: L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 12], html: '<div class="answer-dot">A</div>' }) })
         .bindTooltip(`Earth's answer arrives here (T+${Math.round(a.tAns / 60)} min): the crew is ${a.kind === 'walk' ? 'walking' : 'at'} ${a.where}`, { className: 'mm-tip', direction: 'top', permanent: true, offset: [0, -12] }).addTo(g)
     }
-  }, [st.live, st.askEarth])
+    const ew = st.earthWalk // walk it on Earth (feature F3): your GPS walk, drawn on Mars
+    if (ew?.track?.length > 1) L.polyline(ew.track.map(([lon, lat]) => [lat, lon]), { pane: 'route', color: '#49e3a0', weight: 3.5, opacity: 0.95 }).addTo(g)
+    if (ew?.mars) {
+      if (ew.acc != null && ew.acc > 6) L.circle([ew.mars.lat, ew.mars.lon], { pane: 'route', radius: ew.acc, color: '#49e3a0', weight: 1, fillOpacity: 0.08, interactive: false }).addTo(g)
+      L.marker([ew.mars.lat, ew.mars.lon], { pane: 'route', zIndexOffset: 1270, icon: L.divIcon({ className: '', iconSize: [34, 34], iconAnchor: [17, 17], html: '<div class="earth-walker"><b>YOU</b></div>' }) })
+        .bindTooltip(`<b>You, walking on Earth</b>${ew.sim ? ' (simulated)' : ''}${ew.wb != null ? `<br>${ew.wb.toFixed(1)} min walk back` : ''}`, { className: 'mm-tip', direction: 'top', offset: [0, -16] }).addTo(g)
+    }
+  }, [st.live, st.askEarth, st.earthWalk])
 
   // ------------------------------------------------------------------ smart planner: autoplan preview, scout flight, tags, sketch (C1-C3, G3)
   useEffect(() => {
@@ -439,6 +447,25 @@ export default function MapView() {
     }).catch(() => {})
     return () => { alive = false }
   }, [st.vectors.grid, site.id])
+
+  // ------------------------------------------------------------------ rover chemistry at the targets (feature E2)
+  useEffect(() => {
+    const g = groups.current.chem
+    g.clearLayers()
+    if (!st.vectors.chemistry || !site.chemistry) return undefined
+    let alive = true
+    api.chemistry(site.id).then((d) => {
+      if (!alive) return
+      for (const t of d.targets) {
+        const tip = `<b>${t.name}</b> · sol ${t.sol} · ${d.instrument}, ${t.n_points} point${t.n_points === 1 ? '' : 's'}${t.dist_m ? ` at ${t.dist_m.toFixed(1)} m` : ''}`
+          + `<br><span style="color:${t.color}">●</span> ${t.hint} · oxides, weight %${chemBarsHtml(t)}`
+          + `<span style="opacity:.7">Placed where Curiosity stood on sol ${t.sol} (ChemCam reaches ~7 m)</span>`
+        L.circleMarker([t.lat, t.lon], { pane: 'vectors', radius: 4.5, color: '#1a0f08', weight: 1.2, fillColor: t.color, fillOpacity: 0.95, bubblingMouseEvents: false })
+          .bindTooltip(tip, { className: 'mm-tip', direction: 'top' }).addTo(g)
+      }
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [st.vectors.chemistry, site])
 
   // ------------------------------------------------------------------ Ingenuity's flights (Jezero)
   useEffect(() => {

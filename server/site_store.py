@@ -304,6 +304,12 @@ class Site:
         return (hz >= sun_elev).astype(np.uint8)
 
     @cached_property
+    def chemistry(self) -> dict | None:
+        """Rover chemistry at the targets (ChemCam oxides at Gale), or None (feature E2)."""
+        p = self.dir / "chemistry.json"
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+
+    @cached_property
     def regional(self):
         p = self.dir / "regional_200m.tif"
         if not p.exists():

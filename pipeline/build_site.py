@@ -35,7 +35,7 @@ DATA_DIR = ROOT / "data"
 log = logging.getLogger("pipeline")
 
 STEPS = ["dem", "regional", "derive", "team_dem", "skyview", "imagery", "thermal", "thermal_day", "crism", "geology", "boulders",
-         "sand", "confidence", "rover", "ingenuity", "science", "contours", "meta"]
+         "sand", "confidence", "rover", "ingenuity", "chemistry", "science", "contours", "meta"]
 
 ANALYSIS_FACTOR = 2  # analysis grid = 2 m
 HORIZON_FACTOR = 4  # horizon / shielding grid = 4 m
@@ -384,6 +384,20 @@ class Builder:
             return
         if meta:
             self.meta["ingenuity"] = meta
+
+    def step_chemistry(self):
+        """What the rover measured at its targets (ChemCam oxides at Gale), placed on the rover's track."""
+        if not self.need("chemistry.json") and "chemistry" in self.meta:
+            return
+        from . import chemistry
+        try:
+            meta = chemistry.build(self.out, self.cfg, self.grid, self.cache / "chemcam")
+        except Exception as e:  # offline: the site still builds without it
+            log.warning("chemistry step skipped: %s", e)
+            return
+        if meta:
+            self.meta["chemistry"] = meta
+            log.info("chemistry: %d targets from %s", meta["n_targets"], ", ".join(meta["files"]))
 
     def step_rover(self):
         rv = self.cfg["rover"]

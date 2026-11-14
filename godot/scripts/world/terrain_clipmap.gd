@@ -52,6 +52,10 @@ func build(td: TerrainData, albedo: Texture2D, albedo_reg: Texture2D, normal_map
 		material.set_shader_parameter("albedo_reg_tex", albedo_reg)
 	elif albedo:
 		material.set_shader_parameter("albedo_reg_tex", albedo)
+	if albedo and albedo_reg and td.has_regional():
+		var tint := match_reg_tint(albedo, albedo_reg, td)
+		if tint != Vector3.ZERO:
+			material.set_shader_parameter("reg_tint", tint)
 	var detail := detail_textures()
 	material.set_shader_parameter("detail_nrm", detail[0])
 	material.set_shader_parameter("detail_val", detail[1])
@@ -59,6 +63,70 @@ func build(td: TerrainData, albedo: Texture2D, albedo_reg: Texture2D, normal_map
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	custom_aabb = AABB(Vector3(-70000, -8000, -70000), Vector3(140000, 20000, 140000))
 	extra_cull_margin = 16384.0
+
+
+## The regional imagery is greyscale CTX coloured with reg_tint. One fixed tint suits Gale but leaves Jezero's pale
+## HiRISE site as a square pasted on orange ground, so match it to each site: the mean HiRISE colour in a band just
+## inside the site's edge (colour swath only, no grey strips or holes) over the mean CTX brightness of the same
+## ground, both in linear light as the shader sees them. Vector3.ZERO if it cannot be measured.
+static func match_reg_tint(albedo: Texture2D, albedo_reg: Texture2D, td: TerrainData) -> Vector3:
+	var si := albedo.get_image()
+	var ri := albedo_reg.get_image()
+	if si == null or ri == null or si.is_empty() or ri.is_empty():
+		return Vector3.ZERO
+	if si.is_compressed():
+		si.decompress()
+	if ri.is_compressed():
+		ri.decompress()
+	var g := td.grid
+	var r := td.reg_grid
+	var w := g.width * g.res
+	var h := g.height * g.res
+	var sum_s := Vector3.ZERO
+	var sum_r := 0.0
+	var n := 0
+	var count := 800
+	for k in count:
+		var t := float(k) / float(count)
+		var inset := lerpf(0.03, 0.09, fposmod(k * 0.618034, 1.0))   # spread across the band
+		var uv := Vector2(t, inset)
+		match k % 4:
+			1:
+				uv = Vector2(1.0 - inset, t)
+			2:
+				uv = Vector2(t, 1.0 - inset)
+			3:
+				uv = Vector2(inset, t)
+		var cs := si.get_pixel(int(uv.x * (si.get_width() - 1)), int(uv.y * (si.get_height() - 1))).srgb_to_linear()
+		var lum := cs.r * 0.2126 + cs.g * 0.7152 + cs.b * 0.0722
+		var sat := maxf(cs.r, maxf(cs.g, cs.b)) - minf(cs.r, minf(cs.g, cs.b))
+		if lum < 0.004 or sat < 0.01:
+			continue   # a no-data hole, or a grey strip the shader recolours with site_tint
+		var x := g.x_min + uv.x * w
+		var y := g.y_max - uv.y * h
+		var ru := (x - r.x_min) / (r.width * r.res)
+		var rv := (r.y_max - y) / (r.height * r.res)
+		if ru < 0.0 or ru > 1.0 or rv < 0.0 or rv > 1.0:
+			continue
+		var cr := ri.get_pixel(int(ru * (ri.get_width() - 1)), int(rv * (ri.get_height() - 1))).srgb_to_linear()
+		var l := (cr.r + cr.g + cr.b) / 3.0
+		if l < 0.004:
+			continue
+		sum_s += Vector3(cs.r, cs.g, cs.b)
+		sum_r += l
+		n += 1
+	if n < 80 or sum_r <= 0.0:
+		return Vector3.ZERO
+	var m := sum_s / sum_r
+	# most of the way to the match (the seam goes), not all of it: a pale site would otherwise wash out the whole
+	# crater round it. 30 % of the hand-set tint that suits Gale, in log space, keeps the colours warm.
+	var base := Vector3(1.5, 0.8, 0.52)
+	var tint := Vector3(pow(base.x, 0.3) * pow(m.x, 0.7), pow(base.y, 0.3) * pow(m.y, 0.7), pow(base.z, 0.3) * pow(m.z, 0.7))
+	var top := maxf(tint.x, maxf(tint.y, tint.z))
+	if top > 3.0:
+		tint *= 3.0 / top   # keep the hue when it is too bright
+	print("terrain: regional tint matched to the site edge (%d samples): measured %s, used %s" % [n, str(m), str(tint)])
+	return Vector3(maxf(tint.x, 0.3), maxf(tint.y, 0.3), maxf(tint.z, 0.3))
 
 
 ## Two small tiling noise textures for the close-up ground detail (sand ripples, grain, knobbly

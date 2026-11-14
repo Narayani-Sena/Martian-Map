@@ -571,6 +571,7 @@ func _load_grids() -> void:
 		["comms", "/api/sites/%s/grid/comms.bin" % site_id + Api.q({"obs": observers(), "tgt": site.get("radio", {}).get("suit_antenna_m", 2.0)}), "u8"],
 		["hazard", "/api/sites/%s/grid/hazard.bin" % site_id + Api.q(wq), "u8"],
 		["shield", "/api/sites/%s/grid/shield.bin" % site_id, "f32"],
+		["science", "/api/sites/%s/grid/science.bin" % site_id, "u8"],
 	]
 	for j in jobs:
 		var r := await Api.request_raw(str(j[1]), HTTPClient.METHOD_GET, "", 120.0, false)

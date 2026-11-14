@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { MessageSquareText, Radio, Satellite, Send, Waypoints } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Download, Footprints, MessageSquareText, Radio, Satellite, Send, Waypoints } from 'lucide-react'
 import { useStore } from '../../store.js'
-import { interp } from '../../lib/geo.js'
+import { interp, makeGrid } from '../../lib/geo.js'
+import { api } from '../../api.js'
 import { fmtDur, fmtNum } from '../../lib/format.js'
 import { connectConsole, disconnectConsole, earthView, sendCommand, startSimHelmet, stopSimHelmet } from '../../lib/live.js'
 
@@ -151,6 +152,150 @@ function LiveLink() {
   )
 }
 
+// Walk it on Earth (feature F3): the EVA at full scale on a sports field. The phone's GPS moves a dot across the Mars
+// site from the habitat, with the walk-back time live. Your position stays in this browser: only the matching Mars
+// point goes to the planner. Or take the route home as a GPX laid over the ground where you stand.
+const EARTH_M_PER_DEG = 111320
+const earthOffset = (a, b) => [(b.lon - a.lon) * EARTH_M_PER_DEG * Math.cos((a.lat * Math.PI) / 180), (b.lat - a.lat) * EARTH_M_PER_DEG]
+const earthAt = (a, dx, dy) => ({ lon: a.lon + dx / (EARTH_M_PER_DEG * Math.cos((a.lat * Math.PI) / 180)), lat: a.lat + dy / EARTH_M_PER_DEG })
+
+function routeOffsets(g, plan, hab) {
+  const [hx, hy] = g.toXY(hab.lon, hab.lat)
+  return plan.legs.flatMap((L) => L.path).map(([lon, lat]) => { const [x, y] = g.toXY(lon, lat); return [x - hx, y - hy] })
+}
+
+function gpxText(anchor, offsets, stops, g, hab, name) {
+  const [hx, hy] = g.toXY(hab.lon, hab.lat)
+  const f = (v) => v.toFixed(7)
+  const esc = (t) => String(t).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]))
+  const wpts = [{ name: 'Habitat', ...anchor }, ...stops.map((s) => { const [x, y] = g.toXY(s.lon, s.lat); return { name: s.name, ...earthAt(anchor, x - hx, y - hy) } })]
+  const trk = offsets.map(([dx, dy]) => { const p = earthAt(anchor, dx, dy); return `<trkpt lat="${f(p.lat)}" lon="${f(p.lon)}"/>` })
+  return ['<?xml version="1.0" encoding="UTF-8"?>',
+    '<gpx version="1.1" creator="Martian Map" xmlns="http://www.topografix.com/GPX/1/1">',
+    `<metadata><name>${esc(name)} at full scale</name><desc>The planned Mars EVA laid over Earth at 1:1, starting where you stand.</desc></metadata>`,
+    ...wpts.map((w) => `<wpt lat="${f(w.lat)}" lon="${f(w.lon)}"><name>${esc(w.name)}</name></wpt>`),
+    `<trk><name>${esc(name)}</name><trkseg>`, ...trk, '</trkseg></trk>', '</gpx>', ''].join('\n')
+}
+
+function WalkOnEarth() {
+  const site = useStore((s) => s.site)
+  const plan = useStore((s) => s.plan)
+  const ew = useStore((s) => s.earthWalk)
+  const set = useStore((s) => s.set)
+  const [err, setErr] = useState(null)
+  const watchId = useRef(null)
+  const simTimer = useRef(null)
+  const lastQuery = useRef(0)
+  const g = useMemo(() => (site ? makeGrid(site.grid) : null), [site])
+
+  const onFix = (pos) => {
+    const s = useStore.getState()
+    const cur = s.earthWalk || {}
+    const anchor = cur.anchor || pos
+    const [dx, dy] = earthOffset(anchor, pos)
+    const [hx, hy] = g.toXY(s.habitat.lon, s.habitat.lat)
+    const [lon, lat] = g.toLonLat(hx + dx, hy + dy)
+    let step = 0
+    if (cur.mars) {
+      const [ax, ay] = g.toXY(cur.mars.lon, cur.mars.lat)
+      step = Math.hypot(hx + dx - ax, hy + dy - ay)
+    }
+    const noisy = pos.acc != null && pos.acc > 25 // a poor fix: show it, but don't count it as walking
+    const track = [...(cur.track || []), [lon, lat]].slice(-3000)
+    s.set({ earthWalk: { ...cur, on: true, anchor, mars: { lon, lat }, acc: pos.acc, track, walked: (cur.walked || 0) + (noisy ? 0 : step) } })
+    const now = Date.now()
+    if (now - lastQuery.current > 1800) {
+      lastQuery.current = now
+      api.query(s.siteId, { lon, lat, hab_lon: s.habitat.lon, hab_lat: s.habitat.lat }).then((v) => {
+        const e = useStore.getState().earthWalk
+        if (e) useStore.getState().set({ earthWalk: { ...e, wb: v.inside === false ? null : v.walkback_min, inside: v.inside !== false } })
+      }).catch(() => {})
+    }
+  }
+
+  const stop = () => {
+    if (watchId.current != null) navigator.geolocation?.clearWatch(watchId.current)
+    watchId.current = null
+    clearInterval(simTimer.current)
+    simTimer.current = null
+    const e = useStore.getState().earthWalk
+    if (e) set({ earthWalk: { ...e, on: false } })
+  }
+  useEffect(() => () => { if (watchId.current != null) navigator.geolocation?.clearWatch(watchId.current); clearInterval(simTimer.current) }, [])
+
+  const startGps = () => {
+    setErr(null)
+    if (!window.isSecureContext) { setErr('Browsers only share location with secure pages: open the planner over HTTPS, or at localhost on this computer.'); return }
+    if (!navigator.geolocation) { setErr('This browser has no location service.'); return }
+    set({ earthWalk: { on: true, sim: false, track: [], walked: 0 } })
+    watchId.current = navigator.geolocation.watchPosition(
+      (p) => onFix({ lon: p.coords.longitude, lat: p.coords.latitude, acc: p.coords.accuracy }),
+      (e) => { setErr(e.message || 'Location unavailable'); stop() },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 })
+  }
+
+  const simulate = () => {
+    if (!plan) return
+    setErr(null)
+    const offs = routeOffsets(g, plan, useStore.getState().habitat)
+    const field = { lon: 0, lat: 0 } // a stand-in field: the simulated walk needs no real place
+    const pts = []
+    for (let i = 1; i < offs.length; i++) {
+      const [x0, y0] = offs[i - 1]
+      const [x1, y1] = offs[i]
+      const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 8))
+      for (let k = 0; k < n; k++) pts.push([x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n])
+    }
+    set({ earthWalk: { on: true, sim: true, track: [], walked: 0, anchor: field } })
+    let i = 0
+    simTimer.current = setInterval(() => {
+      if (i >= pts.length) { stop(); return }
+      onFix({ ...earthAt(field, pts[i][0], pts[i][1]), acc: 4 })
+      i += 1
+    }, 200)
+  }
+
+  const saveGpx = () => {
+    const s = useStore.getState()
+    const go = (anchor) => {
+      const text = gpxText(anchor, routeOffsets(g, plan, s.habitat), s.stops, g, s.habitat, `${site.short_name} EVA`)
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([text], { type: 'application/gpx+xml' }))
+      a.download = `eva_on_earth_${site.id}.gpx`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    }
+    if (ew?.anchor && !ew.sim) { go(ew.anchor); return }
+    if (!window.isSecureContext || !navigator.geolocation) { setErr('Location needs a secure page: open the planner over HTTPS, or at localhost on this computer.'); return }
+    navigator.geolocation.getCurrentPosition((p) => go({ lon: p.coords.longitude, lat: p.coords.latitude }), (e) => setErr(e.message || 'Location unavailable'), { enableHighAccuracy: true, timeout: 20000 })
+  }
+
+  const total = plan ? plan.totals.dist_m : 0
+  return (
+    <>
+      <p className="hint" style={{ marginTop: 0 }}>Walk the EVA at full scale on a sports field: the phone's GPS moves your dot across the site from the habitat, with the walk-back time live. Your position stays in this browser; only the matching Mars point goes to the planner.</p>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        {!ew?.on ? (
+          <>
+            <button className="btn sm primary" onClick={startGps} disabled={!plan}><Footprints size={13} /> Start walking</button>
+            <button className="btn sm" onClick={simulate} disabled={!plan}>Simulate a walk</button>
+          </>
+        ) : <button className="btn sm" onClick={stop}>Stop</button>}
+        <button className="btn sm" onClick={saveGpx} disabled={!plan}><Download size={13} /> Route over my neighbourhood (GPX)</button>
+        {ew && !ew.on && <button className="btn sm ghost" onClick={() => set({ earthWalk: null })}>Clear</button>}
+      </div>
+      {err && <p className="hint" style={{ color: 'var(--warning)' }}>{err}</p>}
+      {ew?.mars && (
+        <div className="wh-stats" style={{ marginTop: 8 }}>
+          <div><b>{fmtNum(ew.walked || 0)} m</b><span>walked{total ? ` of ${fmtNum(total)}` : ''}</span></div>
+          <div><b>{ew.inside === false ? 'off site' : ew.wb != null ? `${fmtNum(ew.wb, 1)}′` : '…'}</b><span>walk back</span></div>
+          <div><b>{ew.acc != null ? `±${Math.round(ew.acc)} m` : '—'}</b><span>{ew.sim ? 'simulated' : 'GPS'}</span></div>
+        </div>
+      )}
+    </>
+  )
+}
+
 export default function EarthPanel() {
   return (
     <>
@@ -168,6 +313,10 @@ export default function EarthPanel() {
           <p className="hint" style={{ marginTop: 0 }}>Earth is too far away to direct an EVA, so the habitat does. A crew member inside follows the walker live and can push a waypoint into the visor.</p>
           <LiveLink />
         </div>
+      </div>
+      <div className="section">
+        <h3><span><Footprints size={11} style={{ verticalAlign: -1 }} /> Walk it on Earth</span></h3>
+        <div className="card"><WalkOnEarth /></div>
       </div>
     </>
   )

@@ -32,6 +32,7 @@ var moonlight: DirectionalLight3D
 var terrain_mesh: TerrainClipmap
 var orbit := OrbitRig.new()
 var walker := Walker.new()
+var keep_clock := false   # ghost pacer (feature A6): walking by hand does not pause the EVA clock
 var mode := "orbit"
 var ready_terrain := false
 var td: TerrainData
@@ -1489,7 +1490,7 @@ func _process(delta: float) -> void:
 			auto_target["xy"] = outside_structures(auto_target["xy"], me)   # (where you look stays: a building is fine)
 		xf = walker.update(delta, auto_target if Mission.has_plan() else {}, not ui_focus)
 		if was_auto and not walker.autopilot:
-			if Mission.playing:
+			if Mission.playing and not keep_clock:
 				Mission.set_playing(false)
 			manual_taken.emit()
 		target_fov = Settings.walk_fov

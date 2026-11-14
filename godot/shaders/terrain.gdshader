@@ -55,6 +55,8 @@ uniform float normal_strength = 1.0;
 
 uniform float overlay_opacity = 0.0;
 uniform float overlay_reveal = 1.0e9;
+uniform float overlay_edge = 35.0;   // soft edge of the reveal (m); 2.5 for the data flashlight (feature A7)
+uniform vec3 wb_gain = vec3(1.0);     // geologist's white balance (feature G6): Earth-like light
 uniform vec2 overlay_origin = vec2(0.0);
 uniform vec3 accent : source_color = vec3(0.31, 0.82, 1.0);
 
@@ -64,8 +66,14 @@ uniform sampler2D flow_tex : filter_linear, repeat_disable;
 uniform float flow_strength = 0.0;
 const float FLOW_EVERY = 1.4;
 
+// Flood the crater (feature A4): world Y of the ancient lake's surface (-1e9 = no lake), and its one body of water
+// on the regional grid (R > 0.5 = lake), so a low plain outside the crater rim stays dry.
+uniform float lake_y = -1.0e9;
+uniform sampler2D lake_tex : filter_linear, repeat_disable;
+
 uniform float contour_strength = 0.0;
 uniform float contour_interval = 5.0;
+uniform float contour_glow = 0.0;   // synthetic vision (feature B6): the lines glow, readable in dust or dusk
 uniform float grid_strength = 0.0;
 uniform float grid_spacing = 100.0;
 
@@ -246,21 +254,43 @@ void fragment() {
 		alb = mix(alb, detail, near_f);
 	}
 	float lum = dot(alb, vec3(0.299, 0.587, 0.114));
-	alb = mix(vec3(lum), alb, saturation) * tint * albedo_gain;
+	alb = mix(vec3(lum), alb, saturation) * tint * albedo_gain * wb_gain;
 
 	vec3 emit = vec3(0.0);
+
+	// the ancient lake: ground under the water reads as a lake bed (darker and bluer the more water lies in front of
+	// it), caustics in the shallows, wet ground just above the waterline and a pale line where the water meets it
+	if (lake_y > -1.0e8) {
+		float fw_h = max(fwidth(v_world.y), 0.03);
+		if (texture(lake_tex, uv_reg).r > 0.5) {
+			float ld = lake_y - v_world.y;   // metres of water over this ground
+			if (ld > 0.0) {
+				float path = CAMERA_POSITION_WORLD.y < lake_y ? cam_d : ld * 2.2;
+				float dk = 1.0 - exp(-path / 26.0);
+				alb = mix(alb * vec3(0.7, 0.86, 0.9), vec3(0.03, 0.13, 0.16), dk * 0.88);
+				float c1 = tnoise(xy * 0.31 + vec2(TIME * 0.07, TIME * 0.05));
+				float c2 = tnoise(ROT_A * xy * 0.43 - vec2(TIME * 0.06, -TIME * 0.04));
+				float caus = pow(clamp(1.0 - abs(c1 - c2) * 2.4, 0.0, 1.0), 7.0);
+				emit += vec3(0.55, 0.92, 1.0) * caus * exp(-ld / 7.0) * 0.3 * (1.0 - smoothstep(60.0, 500.0, cam_d));
+			} else {
+				alb *= mix(0.68, 1.0, smoothstep(0.0, 1.8, -ld));
+			}
+			float shore = 1.0 - smoothstep(0.0, 0.35 + fw_h * 1.5, abs(ld));
+			emit += vec3(0.85, 0.97, 1.0) * shore * 0.3 * (1.0 - smoothstep(1500.0, 6000.0, cam_d));
+		}
+	}
 
 	// draped analysis layer with a radial "scan" reveal
 	if (overlay_opacity > 0.001 && w > 0.0) {
 		vec4 ov = texture(overlay_tex, uv_site);
 		float d = length(xy - overlay_origin);
-		float shown = 1.0 - smoothstep(overlay_reveal - 35.0, overlay_reveal, d);
+		float shown = 1.0 - smoothstep(overlay_reveal - overlay_edge, overlay_reveal, d);
 		float a = ov.a * overlay_opacity * shown * w;
 		alb = mix(alb, ov.rgb, a);
 		emit += ov.rgb * a * 0.10;
 		if (overlay_reveal < 9000.0) {
-			float front = exp(-pow((d - overlay_reveal) / max(5.0, cam_d * 0.004), 2.0));
-			emit += accent * front * 2.2;
+			float front = exp(-pow((d - overlay_reveal) / max(min(5.0, overlay_edge * 0.5), cam_d * 0.004), 2.0));
+			emit += accent * front * (overlay_edge < 10.0 ? 0.55 : 2.2);   // a soft torch rim for the data flashlight
 		}
 	}
 
@@ -288,6 +318,7 @@ void fragment() {
 		float fade = 1.0 - smoothstep(2500.0, 9000.0, cam_d);
 		alb = mix(alb, vec3(0.03, 0.04, 0.05), max(minor * 0.3, major * 0.55) * contour_strength * fade);
 		emit += vec3(1.0, 0.86, 0.62) * major * 0.12 * contour_strength * fade;
+		emit += vec3(0.35, 0.9, 1.0) * (minor * 0.55 + major * 1.1) * contour_glow * fade * (1.0 - smoothstep(250.0, 1400.0, cam_d));
 	}
 
 	// 100 m survey grid

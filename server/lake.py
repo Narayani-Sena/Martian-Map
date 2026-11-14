@@ -40,4 +40,30 @@ def stats(site, level: float, points: list[dict]) -> dict:
     return out
 
 
+def mask(site, level: float, dilate: int = 2) -> np.ndarray | None:
+    """Where a lake at `level` m stands on the 200 m regional DEM, as one body of water: the cells below the level
+    that join the water over the site. A low plain outside the crater rim is not part of it (east of Jezero the
+    Isidis lowlands lie far below -2,500 m). The site's own footprint is always allowed: the 3D view draws the
+    shoreline there from the 1 m terrain. Widened by `dilate` cells so the coarse mask never cuts that shoreline.
+    uint8, 255 = water, row 0 = north edge; None without a regional DEM."""
+    from scipy import ndimage
+
+    arr, rg = site.regional
+    if arr is None:
+        return None
+    z = arr.astype(np.float32) + float(site.meta.get("regional_offset_m", 0.0))
+    lab, _ = ndimage.label(np.isfinite(z) & (z < level))   # 4-connected: no leaks through diagonal gaps in a rim
+    g = site.grid
+    c0 = max(0, int(np.floor((g.x_min - rg.x_min) / rg.res)))
+    c1 = min(rg.width, int(np.ceil((g.x_min + g.width * g.res - rg.x_min) / rg.res)))
+    r0 = max(0, int(np.floor((rg.y_max - g.y_max) / rg.res)))
+    r1 = min(rg.height, int(np.ceil((rg.y_max - g.y_max + g.height * g.res) / rg.res)))
+    ids = np.unique(lab[r0:r1, c0:c1])
+    m = np.isin(lab, ids[ids > 0])
+    if dilate and m.any():
+        m = ndimage.binary_dilation(m, iterations=dilate)
+    m[r0:r1, c0:c1] = True
+    return m.astype(np.uint8) * 255
+
+
 LEGEND = {"unit": "metres of water", "stops": [[0, "#7fe3e0"], [10, "#3fb8d9"], [36, "#1f6fb5"], [120, "#0b2a6b"]]}

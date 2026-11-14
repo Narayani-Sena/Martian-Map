@@ -59,16 +59,24 @@ func play() -> void:
 			"walk":
 				walks.append(e)
 
-	# 1. the plan from above
-	shot = "overview"
+	# 1. the data behind the map: the layers lift off the terrain as a stack (feature A2)
 	if world.mode == "walk":
 		shell._set_mode("orbit")
 		if not await _hold(me, 1.6):
 			return
 	Mission.set_playing(false)
+	if shell.tower != null:
+		shot = "tower"
+		_say("1 / 6 · The data", "Every layer behind this map lifts off the terrain, named with its mission and instrument: HiRISE imagery and terrain, THEMIS heat, CRISM minerals, then the hazard, science and ways-home layers made from them.")
+		await shell.play_tower(5.0, false)
+		if me != _run_id or not running:
+			return
+
+	# 2. the plan from above
+	shot = "overview"
 	world.home_view()
 	world.orbit.auto_rotate = true
-	_say("1 / 5 · The plan", "Gale crater's boxwork ridges on HiRISE 1 m terrain. The cyan route links the science stations; the rings show how long the walk back to the habitat takes from anywhere.")
+	_say("2 / 6 · The plan", "Gale crater's boxwork ridges on HiRISE 1 m terrain. The cyan route links the science stations; the rings show how long the walk back to the habitat takes from anywhere.")
 	if not await _hold(me, 6.5):
 		return
 
@@ -84,7 +92,7 @@ func play() -> void:
 	var yaw0: float = -atan2(dir0.x, dir0.y) if dir0.length() > 0.5 else world.orbit.yaw
 	world.orbit.auto_rotate = false
 	world.orbit.fly_to(world.td.world_at(p0), CHASE_DIST, yaw0, deg_to_rad(CHASE_PITCH), 2.4)
-	_say("2 / 5 · Out on foot", "Riding along behind EV1 and EV2 at x10 on the planned route. The timeline below plays the whole EVA, and the suit consumables drain as they walk.")
+	_say("3 / 6 · Out on foot", "Riding along behind EV1 and EV2 at x10 on the planned route. The timeline below plays the whole EVA, and the suit consumables drain as they walk.")
 	if not await _hold(me, 2.5):
 		return
 	shell.follow_crew = true
@@ -107,7 +115,7 @@ func play() -> void:
 		var stop_id := _stop_id_named(str(ev.get("name", "")))
 		if stop_id != "":
 			shell._select_stop(stop_id)
-		_say("3 / 5 · On station", "%s: the crew works the station's tasks. The panels show conditions, space weather, the rover's camera and every safety layer." % str(ev.get("name", "")))
+		_say("4 / 6 · On station", "%s: the crew works the station's tasks. The panels show conditions, space weather, the rover's camera and every safety layer." % str(ev.get("name", "")))
 		if not await _hold(me, 7.0):
 			return
 
@@ -122,7 +130,7 @@ func play() -> void:
 		return
 	Mission.speed_index = 1
 	Mission.set_playing(true)
-	_say("4 / 5 · In the helmet", "EV1's visor: suit consumables, the next waypoint, walk-back time, radio link and dose. WASD would take over and walk by hand.")
+	_say("5 / 6 · In the helmet", "EV1's visor: suit consumables, the next waypoint, walk-back time, radio link and dose. WASD would take over and walk by hand.")
 	if not await _hold(me, 13.0):
 		return
 
@@ -133,7 +141,7 @@ func play() -> void:
 	if not await _hold(me, 1.2):
 		return
 	world.home_view()
-	_say("5 / 5 · Your turn", "Plan the stops, check the safety layers, then walk it. F1 lists every key; the guided tour is under the gear.")
+	_say("6 / 6 · Your turn", "Plan the stops, check the safety layers, then walk it. F1 lists every key; the guided tour is under the gear.")
 	if not await _hold(me, 5.0):
 		return
 	stop(false)
@@ -147,6 +155,8 @@ func stop(by_user := true) -> void:
 	_chase = false
 	shot = ""
 	_run_id += 1   # any shot still waiting gives up
+	if shell.tower != null:
+		shell.tower.stop()
 	Mission.set_playing(false)
 	if world.mode == "orbit":
 		Mission.speed_index = int(_saved.get("speed", Mission.speed_index))
@@ -170,6 +180,17 @@ func _stop_id_named(name: String) -> String:
 	return str(Mission.stops[0]["id"]) if not Mission.stops.is_empty() else ""
 
 
+## A caption outside the demo (the trailer's extra shots); hide_caption() fades it.
+func caption(title: String, text: String) -> void:
+	_say(title, text)
+
+
+func hide_caption() -> void:
+	var tw := _caption.create_tween()
+	tw.tween_property(_caption, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(func(): _caption.visible = false)
+
+
 func _say(title: String, text: String) -> void:
 	_cap_title.text = title.to_upper()
 	_cap_text.text = text
@@ -181,10 +202,13 @@ func _say(title: String, text: String) -> void:
 
 
 ## Waits `s` seconds of the demo. False if the demo was stopped meanwhile (the caller just returns).
+## Counts frame time, not the wall clock, so a recording (--write-movie at a fixed frame rate, slower than real
+## time) keeps every shot at its full length.
 func _hold(me: int, s: float) -> bool:
-	var end := Time.get_ticks_msec() + int(s * 1000.0)
-	while Time.get_ticks_msec() < end:
+	var left := s
+	while left > 0.0:
 		await get_tree().process_frame
+		left -= get_process_delta_time()
 		if me != _run_id or not running:
 			return false
 	return me == _run_id and running

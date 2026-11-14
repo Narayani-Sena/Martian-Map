@@ -55,6 +55,7 @@ export class MarsScene {
     r.setSize(container.clientWidth, container.clientHeight)
     container.appendChild(r.domElement)
     r.domElement.style.display = 'block'
+    r.domElement.classList.add('scene-canvas')
     this.renderer = r
 
     this.scene = new THREE.Scene()

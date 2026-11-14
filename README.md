@@ -30,12 +30,12 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 | A map, tool or interface a Mars astronaut could use on a surface mission | A web planner for the habitat (desktop or tablet), a native 3D console with a first-person helmet HUD, and an Apollo-style printable traverse sheet and cuff checklist |
 | A science goal and a place to explore | Two real sites: the boxwork ridges of Mount Sharp in Gale crater, which Curiosity studied in 2025, and Perseverance's Three Forks sample depot in Jezero crater |
 | Data from several NASA science missions, layered together | MRO (HiRISE, CTX, CRISM), Mars Odyssey (THEMIS), Curiosity, Perseverance, Ingenuity, NASA DONKI space weather, USGS geologic maps and ESA's HRSC terrain, in more than 20 map layers |
-| At least three kinds of data | Topographic, optical, thermal (night and day), spectral (minerals), geologic, atmospheric, radiation and space weather |
+| At least three kinds of data | Topographic, optical, thermal (night and day), spectral (minerals), chemical (rover laser chemistry), geologic, atmospheric, radiation and space weather |
 | Astronaut safety first | Walk-back time from every point, consumable margins, caution and warning built to NASA-STD-3001, radio coverage, terrain shadow and sunset, CME arrival windows, and tools for when something fails |
 | Spacesuit mobility and carried equipment | Walking speed from Tobler's hiking function, scaled for a suited astronaut; speed and metabolic rate depend on the load carried |
 | A route that avoids obstacles such as large rocks | Our own boulder detector on 25 cm HiRISE images finds about 4,400 boulders at Gale and 11,500 on Jezero's floor; boulders of 2 m or more are no-go, smaller ones cost time |
 | Space weather and radiation | NASA DONKI's predicted CME arrivals at Mars are checked against the time in suits; Curiosity RAD dose rates; terrain shielding; a solar-storm drill |
-| Point-of-view imagery | Curiosity, Perseverance and Ingenuity photos at the places they were taken, and a first-person walk over the real terrain |
+| Point-of-view imagery | Arrival postcards that put a view rendered from the terrain beside the rover's own photo of the same ground, Curiosity, Perseverance and Ingenuity photos at the places they were taken, and a first-person walk over the real terrain |
 | Rovers and astronauts working in pairs | A pressurized rover (PR-2) as transport, safe haven and radio relay, and a two-person EVA with partner-down rescue times |
 
 ## What it does
@@ -86,19 +86,69 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
   The median error is 4 m on Gale and 14 m on Jezero's flat floor.
 * **Fallback card and radio grid.** A printable card for a dead HUD, and grid references ("Kilo seven") to say where
   you are over the radio.
+* **HUD-failure drill.** In the helmet the visor goes dark: no route, beacons or labels, only a paper card with the
+  heading home, the pace count, where your shadow and the sun fall on a clock face, a named landmark on the skyline
+  and the habitat's grid square. Ask the skyline for a fix if you are lost; at the door the walk is scored.
+
+### Plan smarter
+
+* **Plan it for me.** Give a time in suits and get three EVAs (safe, balanced, bold) that collect the most science
+  inside the margins, with the stops in the best order, each planned for real. At the same 162 minutes in suits as
+  the hand-picked Gale EVA it finds 2.1 times the science, and all three come out GO.
+* **Scout first.** It finds the stretches where GO rests on uncertain data (the two terrain models disagree, or the
+  sand clues do), plans a helicopter flight over them, as Ingenuity scouted for Perseverance's drivers, and shows the
+  plan again with the uncertainty narrowed. The flight's result is simulated, and the app says so.
+* **Crew-tagged map.** Look at a spot and press once: a hazard tag closes that ground and the route is planned again;
+  a find becomes a candidate stop.
+* **The cost of a rock.** Samples add mass as the EVA goes on, so each one has a price in minutes of margin. The EVA
+  ends with a debrief page: walked against planned, time at each station, and a passport for every sample.
+* **Beat the planner.** Sketch your own route; it is scored with the same walking model and raced against A*.
+* **Pace notes and a strip map.** Each leg unrolled as a straight strip with boulders (on their side, to scale),
+  turns, climbs, radio shadow and terrain shadow at their distances, and a co-driver voice that reads the notes
+  aloud ("350 m: 3.7 m boulder right, keep left, then left 45°").
+* **Sun in your eyes.** Minutes walking into a low sun (glare in the visor) or with the sun straight behind (flat
+  light that hides the relief), with the same loop walked the other way as an alternative.
 
 ### See the data together
 
 * **Layer tower.** The map's data layers lift off the ground as a 3D stack, each labelled with its mission and
-  instrument, and a needle reads one point through every layer.
+  instrument, and a needle reads one point through every layer. In the 3D console it is the TOWER button and the
+  opening shot of the demo.
 * **Flood the crater.** Jezero's ancient lake at the levels published by Mangold et al. (2024). At −2,500 m, 57 % of
-  the site is under water.
+  the site is under water, 46 m over the habitat. In the 3D console the water rises through the published levels as
+  one body of water (the low plains outside the crater rim stay dry), the lake bed shows through the shallows, and in
+  the helmet the visor gives the metres of water overhead.
+* **Habitat and suit, live.** The 3D console's helmet streams EV1's position, suit and alerts to the web planner's
+  habitat console twice a second, and a crew member inside can push a waypoint or a message into the visor. Earth,
+  11 light-minutes away today, sees the same walk one light-time late.
 * **Earth link.** Sun, Earth and Mars where they are today, CMEs on their way, the light-time delay (11 minutes each
   way today) and an "Ask Earth" exchange that waits for the real delay.
 * **Ingenuity at Jezero.** The helicopter's 24 flights over the site at their altitude, the ground its camera saw,
   and its photos for each flight.
 * **The rover teams' own terrain models,** lined up with ours by phase correlation, so the rovers' tracks, samples
   and colour mosaics sit on the right ground. Rover heights now match our terrain within half a metre.
+* **Geologist's white balance.** One switch shows the ground, the 3D view and the rover photos in Earth-like light,
+  so rock colours read as they would at home (the rover teams publish both natural and white-balanced colour).
+* **The sound of the site.** At Jezero, the wind as Perseverance's SuperCam microphone recorded it on sol 4. Curiosity
+  carries no microphone, so at Gale the app says the wind has never been heard rather than inventing it.
+* **What the rocks are made of.** The rovers' laser chemistry at their targets inside each site, from the NASA
+  Planetary Data System: 462 ChemCam targets at Gale and 204 SuperCam targets at Jezero, as pins with oxide bars
+  (SiO₂, FeO, MgO, CaO and more). Each pin sits where the rover stood that sol, and the point inspector shows the
+  nearest targets, so a stop says what its rock is made of.
+
+### Take it with you
+
+* **Arrival postcards.** For each stop, the view a few steps before arriving, rendered from the HiRISE terrain and
+  colour for the arrival time and sun (with Mount Sharp on the horizon at Gale), beside the rover's own navigation-
+  camera photo from the nearest place it stood.
+* **Mission patch.** A patch for each EVA drawn from the route's own shape, with the site, the sol and the crew's
+  names; it is printed on the traverse sheet and stamped on the postcards.
+* **Touch the map.** The site as a 3D-printable block (closed STL, 150 mm) with the route raised as a ridge and the
+  stops as bumps, and as a textured GLB for 3D viewers and phone AR.
+* **Walk it on Earth.** On a phone, walk the EVA at full scale on a sports field: GPS moves your dot across the Mars
+  site with the walk-back time live, and the route can be saved as a GPX laid over your own neighbourhood. Your
+  position stays in the browser. `run_web.ps1 -Lan` serves the planner over HTTPS on your Wi-Fi, which phones
+  require before they share GPS.
 
 ### Two clients
 
@@ -106,6 +156,11 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 * **3D console** (Godot 4.7): orbit view for planning, first-person helmet HUD for walking, the moving rover, a
   hold-to-confirm ABORT that walks the crew home, glove mode and a cuff menu for suited hands, gamepad and offline
   voice commands, a guided tour and a hands-free demo. It runs at 25-30 FPS on an Intel UHD 620 laptop.
+* **Helmet tools** in the 3D console: a ghost astronaut that walks the plan at the planned pace (K), a data
+  flashlight that shows a layer only where you look (O), synthetic vision with glowing contours and snow poles
+  every 50 m for dust or flat light (N), Earth light (B), hazard and find tags where you look (T), co-driver pace
+  notes read aloud, Geiger clicks from the dose rate and a detector tone over science ground, the HUD-failure drill
+  (U), the skyline fix (Y) and the ancient lake (I).
 
 ## Built on NASA data
 
@@ -122,7 +177,9 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 | NASA CCMC DONKI | CME analyses and predicted arrivals at Mars | Space weather in the plan, Earth link |
 | NASA GISS Mars24 | Mars time and sun position | Sol, local solar time, sun path |
 | ESA / DLR / FU Berlin (Space Agency Partner) | HRSC-MOLA blended terrain model | Regional terrain and far horizon |
+| Curiosity ChemCam and Perseverance SuperCam (PDS Geosciences Node) | LIBS major-oxide compositions per target | Rover chemistry pins, point inspector |
 | Mangold et al. (2024) | Jezero lake levels | Flood-the-crater layer |
+| Perseverance SuperCam microphone (NASA/JPL-Caltech/LANL/CNES/CNRS/ISAE-Supaero) | Wind recording, sol 4 | The sound of Jezero |
 
 All of these are public products. The site pipeline downloads and caches them. All suit, walking and rover numbers
 are planning assumptions and are shown in the app.
@@ -137,8 +194,9 @@ are planning assumptions and are shown in the app.
 * Planet positions match the January 2025 Mars close approach, and the Mars clocks are cross-checked against
   Mars24.
 * The default plans for both sites are GO. A pytest suite covers routing, the suit model, the rover, boulders, CRISM,
-  weather, Mars time, the emergency tools and the site configs. The 3D console has scripted check tours, including
-  25 NASA-standards checks.
+  weather, Mars time, the emergency tools, the lake, the exports and the site configs. The 3D console has scripted
+  check tours, including 25 NASA-standards checks and checks for every helmet tool, the lake, the layer tower and
+  the live link (`-- --tour=tools | lake | tower | live`).
 
 ## Sites
 
@@ -163,7 +221,9 @@ python -m venv .venv; .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python -m pipeline.build_site gale_boxwork        # builds the site data: about 25 min the first time, cached after
 .venv\Scripts\python -m pipeline.build_site jezero_threeforks
 .\run_web.ps1                                                    # web planner: builds web/dist when needed, starts the API, opens http://localhost:8000
+.\run_web.ps1 -Lan                                               # the same over HTTPS for phones on your Wi-Fi (port 8443, self-signed certificate)
 .\run_godot.ps1                                                  # 3D console (finds Godot 4.7 via $env:GODOT or PATH)
+.\run_godot.ps1 -Trailer -Site jezero_threeforks                 # record the hands-free demo to trailer\ (MP4 with ffmpeg)
 .venv\Scripts\python -m pytest -q                                # tests
 ```
 
@@ -177,7 +237,7 @@ repository; the pipeline downloads and builds it.
 config/sites/   site definitions (area, terrain models, basemaps, rover feeds, habitat, stops, shelters)
 pipeline/       builds a site: terrain mosaic, slope and roughness, rover-team terrain and its offset, sky view and
                 horizon, imagery, THEMIS, CRISM, geology, boulders, sand model, terrain confidence, rover track,
-                Ingenuity, science score, contours
+                Ingenuity, rover chemistry, science score, contours
 marsgeo/        shared library: Mars time, site grids, STAC search, map tiles, HTTP session
 server/         FastAPI: plans, routes, walk-back, ways home, emergency tools, viewshed, conditions, weather,
                 space weather, tiles, traverse sheet, live habitat link
@@ -189,9 +249,9 @@ docs/           NASA standards notes
 
 ## Status
 
-Everything described above works and has been checked. Still in progress: a "Smart planner" panel (plan it for me,
-scout first, crew map tags, the cost of each rock sample, beat the planner), glare and pace notes along the route,
-and the helmet side of the live link and of the HUD-failure drill in the 3D console.
+Everything described above works and has been checked, in the web planner and in the 3D console. Still to come:
+the shrinking-world edge drawn in the helmet during the leak drill, and geophysical data, the one kind the brief
+names that the map does not use yet (Perseverance's RIMFAX ground-penetrating radar under the rover's track).
 
 ## Disclaimer
 

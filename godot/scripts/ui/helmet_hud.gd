@@ -49,6 +49,7 @@ var _cuff_key := ""
 var _look_locked := false
 var _layout_queued := false
 var _cw: PanelContainer
+var tools: HelmetTools   # ghost pacer and co-driver notes
 var _cw_icon: Label
 var _cw_title: Label
 var _cw_text: Label
@@ -159,6 +160,11 @@ func _ready() -> void:
 	rv.add_child(ret)
 	_l["turn"] = _txt("", 13, HUD, 600)
 	rv.add_child(_l["turn"])
+	_l["pace"] = _txt("", 13, HUD, 700)   # ghost pacer (feature A6)
+	rv.add_child(_l["pace"])
+	_l["note"] = _txt("", 12, HUD, 600)   # co-driver pace note (feature D3)
+	(_l["note"] as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rv.add_child(_l["note"])
 	var sep1 := UiKit.hline(0.12)
 	rv.add_child(sep1)
 	var tr := UiKit.hbox(8)
@@ -464,6 +470,20 @@ func _process(delta: float) -> void:
 	_update_numbers()
 
 
+func _update_tools() -> void:
+	if tools == null:
+		return
+	var pace := ""
+	var pcol := HUD
+	if tools.ghost_on and is_finite(tools.pace_s):
+		var s := absf(tools.pace_s)
+		var ahead := tools.pace_s >= 0.0
+		pace = "GHOST · %d:%02d %s" % [int(s) / 60, int(s) % 60, "AHEAD" if ahead else "BEHIND"]
+		pcol = UiKit.GOOD if ahead else (UiKit.CAUTION if s < 120.0 else UiKit.BAD)
+	_put(_l["pace"], pace, pcol)
+	_put(_l["note"], ("▸ " + tools.note) if tools.note != "" else "", HUD)
+
+
 ## A value's text with a status word, so the meaning never rests on colour alone.
 static func _tag(v: String, word: String) -> String:
 	return v if word == "" else "%s %s" % [v, word]
@@ -472,6 +492,7 @@ static func _tag(v: String, word: String) -> String:
 func _update_numbers() -> void:
 	if tel == null or tel.d.is_empty():
 		return
+	_update_tools()
 	var d := tel.d
 	var wk := world.walker
 	var xy: Vector2 = d["xy"]
@@ -562,7 +583,7 @@ func _update_numbers() -> void:
 	_put(_l["sunset"], MarsTime.dur(ss) if is_finite(ss) and ss > 0.0 else ("AFTER SUNSET" if is_finite(ss) else "—"),
 		UiKit.CAUTION if is_finite(ss) and ss < 3600.0 else Color("ffd166"))
 	# --- mode line and buttons
-	var auto_text := ("AUTOPILOT · following the plan ×%d" % int(Mission.play_speed()) if Mission.playing else "AUTOPILOT · paused (P to play)") if wk.autopilot else "WALKING BY HAND · EVA clock paused · TAB rejoins the route"
+	var auto_text := ("AUTOPILOT · following the plan ×%d" % int(Mission.play_speed()) if Mission.playing else "AUTOPILOT · paused (P to play)") if wk.autopilot else ("WALKING BY HAND · racing the ghost, EVA clock running · TAB rejoins the route" if world.keep_clock else "WALKING BY HAND · EVA clock paused · TAB rejoins the route")
 	if abort and world.abort_active():
 		if world.abort_done:
 			auto_text = "ABORT COMPLETE · at %s · CANCEL ABORT returns to the plan" % Mission.haven_name()

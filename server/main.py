@@ -50,6 +50,9 @@ from . import pacenotes as pacelib
 from . import scout as scoutlib
 from . import tags as tagslib
 from . import debrief as debrieflib
+from . import export3d
+from . import patch as patchlib
+from . import postcard as postcardlib
 from . import rover as pr
 from . import tiles as tilelib
 from .routing import evaluate_cells, simplify_cells
@@ -114,6 +117,7 @@ class CmeArrival(BaseModel):
 
 class PlanRequest(BaseModel):
     habitat: LonLat
+    crew: list[str] = ["EV1", "EV2"]  # names for the mission patch (feature G1)
     stops: list[Stop] = []
     return_to_habitat: bool = True
     algorithm: str = "astar"
@@ -471,6 +475,7 @@ def site_info(site_id: str):
         "texture_offset_m": meta.get("texture_offset_m"),
         "sand": meta.get("sand"), "terrain_confidence": meta.get("terrain_confidence"),
         "ingenuity": meta.get("ingenuity"), "has_horizon": s.horizon is not None,
+        "chemistry": meta.get("chemistry"),
         "files": files,
         "built_utc": meta.get("built_utc"),
         "defaults": {"walk": WalkParams().to_dict(), "suit": eva.SuitParams().to_dict(), "start_utc": _default_start(g.lon0).isoformat()},
@@ -719,8 +724,10 @@ def _shadow_at(s, utc: str | None) -> np.ndarray:
 _shadow_cache: dict = {}
 
 
-def _layer_on_grid(s, layer: str, size: int, q: dict, hab_lon=None, hab_lat=None, obs=None, tgt=2.0, utc=None) -> Image.Image:
-    """A layer over the whole site (north-up, site grid) as a palette or RGBA image, for draping on 3D terrain."""
+def _layer_on_grid(s, layer: str, size: int, q: dict, hab_lon=None, hab_lat=None, obs=None, tgt=2.0, utc=None,
+                   min_acc: int = 3) -> Image.Image:
+    """A layer over the whole site (north-up, site grid) as a palette or RGBA image, for draping on 3D terrain.
+    min_acc: the smallest ways-home stream drawn (cells that walk home through it)."""
     def cont(arr, vmin, vmax, name):
         v = _resize(arr, size)
         idx = np.nan_to_num(np.clip((v - vmin) / (vmax - vmin) * 255, 0, 255)).astype(np.uint8)
@@ -777,7 +784,7 @@ def _layer_on_grid(s, layer: str, size: int, q: dict, hab_lon=None, hab_lat=None
     if layer in ("ways_home", "ways_home_data"):
         tree = s.flow(_havens(s, q.get("havens"), hab_lon, hab_lat), _walk_from_query(q))
         with tree.lock:
-            return tree.render(size) if layer == "ways_home" else tree.data_texture(min(size, 2048))
+            return tree.render(size, min_acc=min_acc) if layer == "ways_home" else tree.data_texture(min(size, 2048))
     if layer == "walkback":
         f = s.walkback((hab_lon, hab_lat), _walk_from_query(q))["field"]
         m = _resize(np.where(np.isfinite(f), f / 60.0, 1e6), size)
@@ -898,6 +905,11 @@ def site_grid(site_id: str, layer: str, hab_lon: float | None = None, hab_lat: f
         arr, g = s.hazard(_walk_from_query(q)).astype(np.uint8), "grid2"
     elif layer == "shield":
         arr, g = s.shield4.astype(np.float32), "grid4"
+    elif layer == "science":  # 0-255 science-opportunity score, for the helmet's detector chirp (feature F1)
+        sc = (s.science or {}).get("score")
+        if sc is None:
+            raise HTTPException(404, "no science layer for this site")
+        arr, g = np.clip(np.nan_to_num(sc, nan=0.0) * 255.0, 0, 255).astype(np.uint8), "grid2"
     else:
         raise HTTPException(404)
     return Response(np.ascontiguousarray(arr).tobytes(), media_type="application/octet-stream",
@@ -1583,7 +1595,7 @@ def traverse_sheet_html(site_id: str, req: PlanRequest):
     stops = [{**known.get(str(st.id), {}), **st.model_dump()} for st in req.stops]
     cfg = {**s.cfg, "stops": stops, "habitat": {**s.cfg.get("habitat", {}), **req.habitat.model_dump()}}
     view = SimpleNamespace(cfg=cfg, grid=s.grid, dir=s.dir)
-    return HTMLResponse(traverse_sheet.render_html(view, p, p.get("walk")))
+    return HTMLResponse(traverse_sheet.render_html(view, p, p.get("walk"), crew=req.crew, postcard_site=s))
 
 
 def _bearing(a: dict, b: dict) -> float:
@@ -1737,6 +1749,56 @@ def lake(site_id: str, level: float, points: str | None = None):
               [{"lon": st["lon"], "lat": st["lat"], "name": st["name"]} for st in s.cfg.get("stops", [])]
     lk = s.cfg.get("lake") or {}
     return {**lakelib.stats(s, level, pts), "levels": lk.get("levels", []), "source": lk.get("source"), "note": lk.get("note")}
+
+
+CHEM_HINTS = [  # a hint from the oxides for the pin colour, not a mineral identification
+    ("CaO", 20.0, "calcium-rich (sulfate veins?)", "#f4efe2"),
+    ("SiO2", 65.0, "silica-rich", "#8fd3ff"),
+    ("FeOT", 26.0, "iron-rich", "#d0473a"),
+    ("MgO", 12.0, "magnesium-rich", "#52d07a"),
+    ("MnO", 1.0, "manganese-rich", "#b36bff"),
+]
+
+
+def _chem_hint(ox: dict) -> dict:
+    for k, thr, label, col in CHEM_HINTS:
+        if float(ox.get(k, 0.0)) >= thr:
+            return {"hint": label, "color": col}
+    return {"hint": "typical sediment", "color": "#e3a868"}
+
+
+@app.get("/api/sites/{site_id}/chemistry")
+def chemistry(site_id: str, lon: float | None = None, lat: float | None = None, n: int = Query(5, ge=1, le=50),
+              within_m: float = Query(120.0, gt=0, le=5000)):
+    """What the rover measured at its targets (feature E2): ChemCam oxide weight percents at Gale, each target where
+    Curiosity stood on that sol. With lon/lat: the n nearest targets within `within_m`."""
+    s = _site(site_id)
+    doc = s.chemistry
+    if not doc:
+        return {"targets": [], "note": "No rover chemistry for this site in the archive's summary tables yet.",
+                "instrument": None, "source": None}
+    ts = [{**t, **_chem_hint(t["oxides"])} for t in doc["targets"]]
+    if lon is not None and lat is not None:
+        x0, y0 = s.grid.lonlat_to_xy(lon, lat)
+        for t in ts:
+            x, y = s.grid.lonlat_to_xy(t["lon"], t["lat"])
+            t["dist_from_m"] = round(float(math.hypot(x - x0, y - y0)), 1)
+        ts = sorted((t for t in ts if t["dist_from_m"] <= within_m), key=lambda t: t["dist_from_m"])[:n]
+    return {**{k: v for k, v in doc.items() if k != "targets"}, "hints": [{"oxide": k, "min_wt": thr, "hint": lb, "color": c}
+            for k, thr, lb, c in CHEM_HINTS], "targets": ts}
+
+
+@app.get("/api/sites/{site_id}/lake/mask.png")
+def lake_mask(site_id: str, level: float = Query(..., ge=-9000, le=9000)):
+    """The lake at `level` m on the 200 m regional grid (255 = water): one body of water joined to the site, not
+    every low place in the region. The Godot client clips its water surface and lake-bed shading with it."""
+    s = _site(site_id)
+    m = lakelib.mask(s, level)
+    if m is None:
+        raise HTTPException(404, "no regional DEM")
+    buf = io.BytesIO()
+    Image.fromarray(m, "L").save(buf, "PNG")
+    return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 
 # ------------------------------------------------------------- the interplanetary map (A5) and Ask Earth (D2)
@@ -1985,7 +2047,8 @@ def tower_sheet(site_id: str, layer: str, size: int = Query(1024, ge=256, le=204
         if hit is not None:
             _tower_cache[key] = hit
     if hit is None:
-        ov = None if layer == "optical" else _layer_on_grid(s, layer, size, q, hab_lon, hab_lat)
+        # ways home: streams under 16 cells are below a pixel on a sheet this size, and drawing them takes 3x longer
+        ov = None if layer == "optical" else _layer_on_grid(s, layer, size, q, hab_lon, hab_lat, min_acc=16 if size <= 1280 else 6)
         hit = towerlib.jpeg(towerlib.compose(s, layer, size, ov))
         with _tower_lock:
             _tower_cache[key] = hit
@@ -2474,6 +2537,69 @@ def autoplan(site_id: str, req: AutoplanRequest):
             except HTTPException as e:
                 v["plan"] = {"go": False, "error": e.detail}
     return out
+
+
+# ------------------------------------------------------------- arrival postcards (G2)
+@app.post("/api/sites/{site_id}/postcards", response_class=HTMLResponse)
+def postcards(site_id: str, req: PlanRequest):
+    """For each stop: the view a few steps before arriving, rendered from the terrain at the arrival time and sun,
+    beside the rover's own photo from the nearest place it stood; the EVA patch as the stamp."""
+    s = _site(site_id)
+    p = plan(site_id, req)
+    cards = postcardlib.cards_for_plan(s, p, photos=True, budget_s=10.0)
+    legs = p.get("legs") or []
+    route = [pt for L in legs for pt in L["path"]]
+    tt = p["totals"]
+
+    def stamp(n):
+        if len(route) < 2:
+            return ""
+        return patchlib.render_svg(s, route, [L["path"][-1] for L in legs[:-1]], legs[0]["path"][0], req.crew, tt.get("mission_sol"),
+                                   1, tt["dist_m"] / 1000, tt.get("suit_s", tt["total_s"]) / 60, size=150, uid=f"pc{n}")
+    return HTMLResponse(postcardlib.render_html(s, p, cards, stamp))
+
+
+# ------------------------------------------------------------- mission patch (G1)
+class PatchRequest(BaseModel):
+    route: list[list[float]] = []      # [[lon, lat], ...]
+    stops: list[list[float]] = []
+    habitat: list[float] | None = None
+    crew: list[str] = ["EV1", "EV2"]
+    sol: int | None = None
+    eva_no: int = Field(1, ge=1, le=99)
+    dist_km: float | None = None
+    suit_min: float | None = None
+
+
+@app.post("/api/sites/{site_id}/patch.svg")
+def mission_patch(site_id: str, req: PatchRequest):
+    """A round EVA patch drawn from the route's own shape, with the site, the sol and the crew's names."""
+    s = _site(site_id)
+    if len(req.route) < 2:
+        raise HTTPException(422, "The patch needs a route of at least two points")
+    svg = patchlib.render_svg(s, req.route, req.stops, req.habitat, req.crew, req.sol, req.eva_no, req.dist_km, req.suit_min)
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+# ------------------------------------------------------------- touch the map: STL and GLB (F2)
+class ExportRequest(BaseModel):
+    route: list[list[float]] = []      # [[lon, lat], ...] the planned route
+    stops: list[list[float]] = []      # [[lon, lat], ...]
+    habitat: list[float] | None = None  # [lon, lat]
+    exaggeration: float = Field(1.5, ge=1.0, le=5.0)
+
+
+@app.post("/api/sites/{site_id}/export/{fmt}")
+def export_model(site_id: str, fmt: str, req: ExportRequest):
+    """The site as a 3D-printable STL (mm, route raised) or a textured GLB for 3D viewers and phone AR."""
+    if fmt not in ("stl", "glb"):
+        raise HTTPException(404, "Formats: stl, glb")
+    s = _site(site_id)
+    args = (s, req.route, req.stops, req.habitat, req.exaggeration)
+    data = export3d.stl(*args) if fmt == "stl" else export3d.glb(*args)
+    media = "model/stl" if fmt == "stl" else "model/gltf-binary"
+    return Response(content=data, media_type=media,
+                    headers={"Content-Disposition": f'attachment; filename="martian_map_{site_id}.{fmt}"'})
 
 
 @app.get("/api/sites/{site_id}/sun")

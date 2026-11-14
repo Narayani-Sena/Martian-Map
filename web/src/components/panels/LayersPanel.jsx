@@ -86,6 +86,7 @@ export default function LayersPanel() {
     ...((site.files || []).includes('ingenuity.geojson') ? [['ingenuity', 'Ingenuity flights (helicopter)']] : []),
     ['suggestions', 'Suggested science stops'],
     ['grid', 'Radio grid (250 m squares, “Kilo seven”)'],
+    ...(site.chemistry ? [['chemistry', `Rover chemistry: ${site.chemistry.instrument}, ${site.chemistry.n_targets} targets`]] : []),
   ]
 
   return (

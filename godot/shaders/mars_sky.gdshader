@@ -7,6 +7,7 @@ uniform vec3 sun_dir = vec3(0.0, 1.0, 0.0);
 uniform float tau = 0.5;
 uniform float brightness = 1.0;
 uniform float star_strength = 1.0;
+uniform vec3 wb_gain = vec3(1.0);   // geologist's white balance (feature G6)
 uniform vec3 phobos_dir = vec3(0.3, 0.4, -0.86);
 
 float hash(vec3 p) {
@@ -57,5 +58,5 @@ void sky() {
 		}
 	}
 	col = mix(col, horizon * 0.55 * max(day, 0.05) * brightness, smoothstep(0.0, -0.08, d.y));
-	COLOR = col;
+	COLOR = col * wb_gain;
 }

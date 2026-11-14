@@ -9,12 +9,14 @@ signal mode_requested(mode: String)
 signal help_requested
 signal settings_requested
 signal demo_requested
+signal tower_requested
 signal site_requested(id: String)
 signal cw_requested
 
 var gear_btn: Button
 var help_btn: Button
 var demo_btn: Button
+var tower_btn: Button
 
 var _sol: Label
 var _ltst: Label
@@ -123,6 +125,8 @@ func _init() -> void:
 	modes.add_child(_btn_orbit)
 	modes.add_child(_btn_walk)
 	h.add_child(modes)
+	tower_btn = UiKit.button("TOWER", func(): tower_requested.emit(), "The data layers lift off the terrain as a stack, each named with its mission and instrument")
+	h.add_child(tower_btn)
 	demo_btn = UiKit.button("▶ DEMO", func(): demo_requested.emit(), "A hands-free fly-through: orbit, chase and helmet along the EVA. Any key, click or stick takes over.")
 	demo_btn.add_theme_font_override("font", UiKit.symbols())
 	h.add_child(demo_btn)

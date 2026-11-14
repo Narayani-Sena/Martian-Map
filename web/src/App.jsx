@@ -127,6 +127,18 @@ function Splash() {
   )
 }
 
+// Geologist's white balance (feature G6): a von Kries diagonal scaling in linear RGB that takes out the dusty red cast
+// of Martian daylight, so rock colours read as they would under Earth's sky (the rover teams publish both).
+function WhiteBalanceFilter() {
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true" focusable="false">
+      <filter id="wb-earth" colorInterpolationFilters="linearRGB">
+        <feColorMatrix type="matrix" values="0.82 0 0 0 0  0 1.05 0 0 0  0 0 1.40 0 0  0 0 0 1 0" />
+      </filter>
+    </svg>
+  )
+}
+
 export default function App() {
   useSiteLoader()
   usePlanner()
@@ -134,12 +146,14 @@ export default function App() {
   const site = useStore((s) => s.site)
   const mode = useStore((s) => s.mode)
   const planLoading = useStore((s) => s.planLoading)
+  const light = useStore((s) => s.light)
 
   if (!site) return <Splash />
   const walk = mode === 'walk'
   return (
     <>
-      <div className="app">
+      <div className={`app ${light === 'earth' ? 'wb-earth' : ''}`}>
+        <WhiteBalanceFilter />
         <TopBar />
         <div className="workspace" style={walk ? { gridTemplateColumns: '1fr' } : undefined}>
           {!walk && <LeftRail />}

@@ -20,6 +20,10 @@ var plan_panel: PlanPanel
 var info: InfoPanel
 var dock: BottomDock
 var hud: HelmetHud
+var tools: HelmetTools
+var lake: LakeWater            # flood the crater (I): the ancient lake in 3D
+var tower: LayerTower          # TOWER: the data layers lift off the terrain as a stack
+var live: LiveLink             # the helmet's live link to the habitat console (web planner)
 var callouts: Callouts
 var alerts: Alerts
 var lightbox: Lightbox
@@ -225,6 +229,7 @@ func _rebuild_hud() -> void:
 	hud = HelmetHud.new()
 	hud.world = world
 	hud.tel = tel
+	hud.tools = tools
 	ui.add_child(hud)
 	ui.move_child(hud, idx)
 	_connect_hud()
@@ -305,6 +310,27 @@ func _build_ui() -> void:
 	ui.add_child(hud)
 	alerts = Alerts.new()
 	ui.add_child(alerts)
+	tools = HelmetTools.new()
+	tools.name = "HelmetTools"
+	tools.app = self
+	add_child(tools)
+	tools.setup(world, func(t: String, k: String): alerts.toast(t, k), _flashlight_layer)
+	hud.tools = tools
+	lake = LakeWater.new()
+	lake.name = "LakeWater"
+	add_child(lake)
+	lake.setup(world, self, func(t: String, k: String): alerts.toast(t, k))
+	lake.level_changed.connect(func(lv: float):
+		if is_finite(lv) and str(_overlay_layer.get("id", "")) == "lake":
+			_on_overlay(_overlay_layer, true))   # the draped depth map follows the water
+	tower = LayerTower.new()
+	tower.name = "LayerTower"
+	world.add_child(tower)
+	tower.setup(world, ui)
+	live = LiveLink.new()
+	live.name = "LiveLink"
+	add_child(live)
+	live.setup(self)
 	help = _build_help()
 	ui.add_child(help)
 	settings_panel = SettingsPanel.new()
@@ -361,6 +387,7 @@ func _build_ui() -> void:
 	top_bar.help_requested.connect(_toggle_help)
 	top_bar.settings_requested.connect(func(): settings_panel.toggle(ui.size))
 	top_bar.demo_requested.connect(_play_demo)
+	top_bar.tower_requested.connect(_toggle_tower)
 	top_bar.site_requested.connect(_switch_site)
 	top_bar.cw_requested.connect(func(): cw_panel.toggle(ui.size))
 	alerts.list_requested.connect(func(): cw_panel.toggle(ui.size, "ACTIVE"))
@@ -422,6 +449,9 @@ func _build_help() -> PanelContainer:
 		["Ctrl+Z · Ctrl+Y", "undo · redo a mission edit"],
 		["Caution & warning", ""], ["Enter · Shift+Enter", "acknowledge the top alert · all of them"], ["Backspace", "silence the alarm tone"],
 		["F3", "alert list, log, catalogue"], ["Hold End", "ABORT EVA (hold again to cancel)"], ["X", "cuff menu (every crew action)"],
+		["Helmet tools", ""], ["K · O", "ghost pacer · data flashlight"], ["N · B", "synthetic vision and snow poles · Earth light"],
+		["T · Shift+T", "tag a hazard · a find where you look"], ["U · Y", "HUD-failure drill · skyline fix"],
+		["I", "flood the crater: the ancient lake rises, then drains"],
 		["H", "hide the interface"], ["C · G · L · J", "contours · grid · labels · terrain ping"], ["M · F11", "mute (alarms still sound) · fullscreen"], ["F2", "settings"], ["Esc", "back to the map · close"]]
 	var pad := [["Gamepad", ""], ["Left stick", "walk (how far you push sets the pace) · pan the map"], ["Right stick", "look around · rotate and tilt the map"],
 		["LB or L3 · A", "lope · jump"], ["RB", "autopilot on/off"], ["Triggers", "zoom in (right) · out (left)"], ["X · Y", "play/pause · orbit ⇄ helmet"],
@@ -683,6 +713,42 @@ func _play_demo() -> void:
 	director.play()
 
 
+## TOWER (feature A2): the data layers lift off the terrain as a stack and settle back. Again stops it.
+func _toggle_tower() -> void:
+	if tower.running:
+		tower.stop()
+		return
+	await play_tower()
+
+
+## The tower shot: orbit view, the panels and stop labels out of the way, the camera beside the stack, the sheets
+## up, a slow turn, and down again. interruptible: a key or click ends it (the demo handles input itself).
+func play_tower(hold := LayerTower.HOLD_S, interruptible := true) -> void:
+	if not world.ready_terrain or not Mission.has_plan() or tower.running:
+		return
+	if world.mode == "walk":
+		_set_mode("orbit")
+		await _wait(1.2)
+	if not tower.load_sheets_ready():
+		alerts.toast("Composing the layer tower on the mission server…", "info")
+	if not await tower.load_sheets():
+		alerts.toast("The layer tower could not be loaded from the mission server", "bad")
+		return
+	var labels_were := world.show_labels
+	world.set_layer_visible("labels", false)
+	if plan_ui.visible:
+		_fade_plan_ui(false)
+	var cam_was := {"t": world.orbit.target, "d": world.orbit.dist, "y": world.orbit.yaw, "p": world.orbit.pitch}
+	world.orbit.fly_to(tower.focus(), tower.span() * 2.0 + 2600.0, world.orbit.yaw, deg_to_rad(24.0), 2.2)
+	tower.interruptible = interruptible
+	await tower.play(hold)
+	world.set_layer_visible("labels", labels_were)
+	if not ui_hidden and world.mode == "orbit":
+		_fade_plan_ui(true)
+	if interruptible and world.mode == "orbit":
+		world.orbit.fly_to(cam_was["t"], cam_was["d"], cam_was["y"], cam_was["p"], 1.8)
+
+
 ## Ctrl+Z / Ctrl+Y: step through the mission's edit history and re-plan.
 func _undo(redo: bool) -> void:
 	var what := Mission.redo() if redo else Mission.undo()
@@ -721,6 +787,8 @@ func _overlay_url(L: Dictionary) -> String:
 	if dyn == "havens":   # ways home: every cell's fastest walk to the nearest haven (hab, PR-2)
 		q.merge(Mission.walk_query())
 		q["havens"] = Mission.havens_param()
+	if dyn == "level" and lake != null and is_finite(lake.level):   # the lake's depth map at the 3D water's level
+		q["level"] = lake.level
 	return "/api/sites/%s/overlay/%s.png" % [Mission.site_id, id] + Api.q(q)
 
 
@@ -731,6 +799,14 @@ func _overlay_disk_name(L: Dictionary) -> String:
 		return ""
 	var stamp := str(Mission.site.get("built_utc", "")).md5_text().substr(0, 8)
 	return "%s_%s_drape_%s_%d.png" % [Mission.site_id, stamp, id, _overlay_size()]
+
+
+## The data flashlight needs a draped layer: pick one by id from the site's layer list.
+func _flashlight_layer(id: String) -> void:
+	for L in Mission.site.get("layers", []):
+		if str(L.get("id", "")) == id:
+			_on_overlay(L)
+			return
 
 
 ## Drape layer L on the terrain. refresh = the same layer again because the plan changed under it
@@ -746,6 +822,8 @@ func _on_overlay(L: Dictionary, refresh := false) -> void:
 		world.set_flow(null)
 		world.set_way_home(PackedVector2Array())
 		return
+	if id == "lake" and not refresh and lake != null and not lake.on:
+		lake.cycle()   # the lake layer brings the water up too (its level is set before the first await)
 	var url := _overlay_url(L)
 	_overlay_layer = L
 	_overlay_url_now = url
@@ -1404,6 +1482,29 @@ func _unhandled_input(event: InputEvent) -> void:
 		world.scan_pulse(world.walker.xy() if world.mode == "walk" else Geo.xy_of(world.orbit.target))
 	elif event.is_action_pressed("help"):
 		_toggle_help()
+	elif event.is_action_pressed("tag_find", false, true):
+		if world.mode == "walk":
+			tools.tag("find")
+	elif event.is_action_pressed("tag_hazard", false, true):
+		if world.mode == "walk":
+			tools.tag("hazard")
+	elif event.is_action_pressed("white_balance"):
+		tools.set_earth_light(not tools.earth_light)
+	elif event.is_action_pressed("synthetic_vision"):
+		tools.set_synthetic(not tools.synthetic_on)
+	elif event.is_action_pressed("flashlight"):
+		if world.mode == "walk":
+			tools.set_flashlight(not tools.flashlight_on)
+		else:
+			alerts.toast("The data flashlight works in the helmet view (V)", "info")
+	elif event.is_action_pressed("ghost"):
+		tools.set_ghost(not tools.ghost_on)
+	elif event.is_action_pressed("lake"):
+		lake.cycle()
+	elif event.is_action_pressed("hud_drill"):
+		tools.toggle_drill()
+	elif event.is_action_pressed("skyline_fix"):
+		tools.skyline_fix()
 	elif event.is_action_pressed("fullscreen"):
 		var w := get_window()
 		w.mode = Window.MODE_WINDOWED if w.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
@@ -1423,6 +1524,76 @@ func _shot(name: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(capture_dir.path_join(name))
 	print("shot ", name, "  fps=", Engine.get_frames_per_second())
+
+
+## G4 trailer: the hands-free demo, recorded frame by frame by Godot's movie writer (run_godot.ps1 -Trailer).
+## --tour=trailer (run_godot.ps1 -Trailer): the hands-free demo, and at a site with a published lake level the
+## crater flooding, recorded with the movie writer. The camera rolls once the console has finished loading;
+## trailer_marks.txt (in the capture folder) says where, so the launcher can cut the loading out.
+func _trailer() -> void:
+	await _await_plan()
+	var waited := 0.0
+	while not tower.load_sheets_ready() and waited < 300.0:
+		await _wait(0.5)
+		waited += 0.5
+	await _wait(2.0)
+	_trailer_mark("start")
+	director.play()
+	await director.ended
+	var L := lake.levels()
+	if not L.is_empty() and bool(L[0].get("published", false)):
+		await _trailer_lake()
+	await _wait(1.0)
+	_trailer_mark("end")
+	await _wait(0.5)
+
+
+## The ancient lake fills the crater from orbit, then the view from its shore.
+func _trailer_lake() -> void:
+	if world.mode != "orbit":
+		_set_mode("orbit")
+		await _wait(1.2)
+	var labels_were := world.show_labels
+	world.set_layer_visible("labels", false)
+	_fade_plan_ui(false)
+	world.orbit.fly_to(world.td.world_at(Mission.hab_xy()), 5600.0, world.orbit.yaw + 0.7, deg_to_rad(27.0), 2.6)
+	var lv: Dictionary = lake.levels()[0]
+	director.caption("Flood the crater", "The ancient lake at %s m (%s), a level recorded in the delta front's beds: the mudstones the samples come from settled out of this water." % [
+		LakeWater.fmt_elev(float(lv["elev"])), str(lv["name"])])
+	await _wait(2.8)
+	lake.cycle()
+	await _wait(LakeWater.RISE_S + 3.0)
+	var sp := lake.shore_point()
+	if not sp.is_empty():
+		_set_mode("walk")
+		await _wait(1.2)
+		world.walker.autopilot = false
+		var p: Vector2 = sp[0]
+		var down: Vector2 = sp[1]
+		world.walker.place(p - down * 6.0, rad_to_deg(atan2(down.x, down.y)))
+		world.walker.pitch = -0.04
+		director.caption("On the shore", "In the helmet the visor gives the metres of water overhead, and the view is tinted while under it.")
+		await _wait(5.0)
+		world.walker.place(world.haven_door(), 200.0)
+		await _wait(4.0)
+		_set_mode("orbit")
+		await _wait(1.0)
+	director.hide_caption()
+	lake.set_off()
+	await _wait(2.5)
+	world.set_layer_visible("labels", labels_were)
+	_fade_plan_ui(true)
+
+
+func _trailer_mark(name: String) -> void:
+	if capture_dir == "":
+		return
+	var path := capture_dir.path_join("trailer_marks.txt")
+	var f := FileAccess.open(path, FileAccess.READ_WRITE if FileAccess.file_exists(path) else FileAccess.WRITE)
+	if f:
+		f.seek_end()
+		f.store_line("%s %d" % [name, Engine.get_frames_drawn()])
+		f.close()
 
 
 func _wait(s: float) -> void:
@@ -1469,6 +1640,26 @@ func _capture_tour() -> void:
 		return
 	if tour == "datause":
 		await DataUseTour.new(self).run()
+		get_tree().quit()
+		return
+	if tour == "tools":
+		await ToolsTour.new(self).run()
+		get_tree().quit()
+		return
+	if tour == "lake":
+		await ToolsTour.new(self).run_lake()
+		get_tree().quit()
+		return
+	if tour == "tower":
+		await ToolsTour.new(self).run_tower()
+		get_tree().quit()
+		return
+	if tour == "live":
+		await ToolsTour.new(self).run_live()
+		get_tree().quit()
+		return
+	if tour == "trailer":
+		await _trailer()
 		get_tree().quit()
 		return
 	if tour == "fixes":
@@ -2395,7 +2586,7 @@ func _polish_tour() -> void:
 	var speed0 := Mission.speed_index
 	_play_demo()
 	var seen := {}
-	var t_end := Time.get_ticks_msec() + 70000
+	var t_end := Time.get_ticks_msec() + 110000   # the demo opens with the layer tower (sheets load on first use)
 	var behind := -1.0
 	while director.running and Time.get_ticks_msec() < t_end:
 		await get_tree().process_frame
@@ -2408,7 +2599,7 @@ func _polish_tour() -> void:
 			var dir: Vector2 = (st["xy_ahead"] as Vector2) - (st["xy"] as Vector2)
 			behind = rad_to_deg(absf(angle_difference(world.orbit.yaw, -atan2(dir.x, dir.y))))
 	seen.erase("")
-	var full_run := not director.running and seen.has("overview") and seen.has("chase") and seen.has("station") and seen.has("helmet") and seen.has("outro") and world.mode == "orbit" and Mission.speed_index == speed0
+	var full_run := not director.running and seen.has("tower") and seen.has("overview") and seen.has("chase") and seen.has("station") and seen.has("helmet") and seen.has("outro") and world.mode == "orbit" and Mission.speed_index == speed0
 	await _wait(1.5)
 	_play_demo()
 	await _wait(9.0)

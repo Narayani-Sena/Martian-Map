@@ -30,6 +30,11 @@ const ACTIONS := [
 	["contours", "Contours", "Console"], ["grid", "Survey grid", "Console"], ["labels", "Labels", "Console"],
 	["ping", "Terrain scan", "Console"], ["help", "Help", "Console"], ["settings", "Settings", "Console"],
 	["fullscreen", "Fullscreen", "Console"], ["back", "Back / close", "Console"],
+	["white_balance", "Geologist's white balance (Earth light)", "Helmet tools"], ["synthetic_vision", "Synthetic vision and snow poles", "Helmet tools"],
+	["flashlight", "Data flashlight", "Helmet tools"], ["ghost", "Ghost pacer", "Helmet tools"],
+	["tag_hazard", "Tag a hazard where you look", "Helmet tools"], ["tag_find", "Tag a find where you look", "Helmet tools"],
+	["hud_drill", "HUD-failure drill: walk home by the card", "Helmet tools"], ["skyline_fix", "Skyline fix: where am I?", "Helmet tools"],
+	["lake", "Flood the crater: the ancient lake", "Console"],
 ]
 
 static var _defaults := {}   # action -> Array of event descriptors, as registered by setup()
@@ -110,6 +115,15 @@ static func setup() -> void:
 	_button("help", JOY_BUTTON_START)
 	_key("fullscreen", KEY_F11)
 	_key("settings", KEY_F2)
+	_key("white_balance", KEY_B)
+	_key("synthetic_vision", KEY_N)
+	_key("flashlight", KEY_O)
+	_key("ghost", KEY_K)
+	_key("tag_hazard", KEY_T)
+	_key("tag_find", KEY_T, false, true)
+	_key("hud_drill", KEY_U)
+	_key("skyline_fix", KEY_Y)
+	_key("lake", KEY_I)
 	for i in 5:
 		_key("cuff_%d" % (i + 1), KEY_1 + i)
 	_key("undo", KEY_Z, true)

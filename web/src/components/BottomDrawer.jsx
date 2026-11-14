@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Clock, FlaskConical, GitCompareArrows, Mountain, Table2, Wind } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, FlaskConical, GitCompareArrows, Mountain, Route, Square, Table2, Volume2, Wind } from 'lucide-react'
 import { useStore } from '../store.js'
 import { api, walkParams } from '../api.js'
 import XYChart, { Legend } from './charts/XYChart.jsx'
@@ -312,8 +312,151 @@ function CompareTab() {
   )
 }
 
+// Pace notes and the strip map (feature D3): each leg unrolled as a straight strip, like a rally co-driver's roll or
+// an Apollo cuff card. The walker's left is the top edge. Hovering the strip moves the marker on the map.
+const NOTE_COLORS = { turn: '#4fd1ff', boulder: '#ff8a3d', climb: '#f2f2f2', descent: '#f2f2f2', hazard: '#d03b3b', sand: '#e0c070', radio: '#ff5fa2', shade: '#9aa3b8', note: '#cfd6e0' }
+
+function legSamples(p, i) {
+  const idx = []
+  for (let k = 0; k < p.leg.length; k++) if (p.leg[k] === i && !(p.working && p.working[k])) idx.push(k)
+  return idx
+}
+
+function noteParts(n) {
+  return n.text.replace(/^\d+ m: /, '').split(', then ').map((t) => {
+    let m = t.match(/^(left|right) (\d+)°/)
+    if (m) return { kind: 'turn', side: m[1], deg: +m[2], text: t }
+    m = t.match(/([\d.]+) m boulder (left|right)/)
+    if (m) return { kind: 'boulder', side: m[2], size: +m[1], text: t }
+    m = t.match(/^(\d+)° (up|down)/)
+    if (m) return { kind: m[2] === 'up' ? 'climb' : 'descent', deg: +m[1], text: t }
+    const kind = /radio/.test(t) ? 'radio' : /shadow/.test(t) ? 'shade' : /sand/.test(t) ? 'sand' : /hazard/.test(t) ? 'hazard' : 'note'
+    return { kind, text: t }
+  })
+}
+
+const spoken = (text) => text.replace(/(\d+(?:\.\d+)?) m\b/g, '$1 metres').replace(/°/g, ' degrees')
+
+function StripTab() {
+  const plan = useStore((s) => s.plan)
+  const hoverD = useStore((s) => s.hoverD)
+  const set = useStore((s) => s.set)
+  const [leg, setLeg] = useState(0)
+  const [speaking, setSpeaking] = useState(false)
+  const notes = plan?.pace_notes
+  const p = plan?.profile
+  const i = notes?.length ? Math.min(leg, notes.length - 1) : 0
+  const geo = useMemo(() => {
+    if (!p || !notes?.length) return null
+    const idx = legSamples(p, i)
+    if (idx.length < 2) return null
+    const d0 = p.d[idx[0]]
+    const len = Math.max(1, p.d[idx[idx.length - 1]] - d0)
+    const pct = (d) => Math.min(100, Math.max(0, (d / len) * 100))
+    const bands = { hazard: [], radio: [], shade: [] }
+    for (let j = 0; j < idx.length - 1; j++) {
+      const k = idx[j]
+      const a = pct(p.d[k] - d0)
+      const w = Math.max(0.15, pct(p.d[idx[j + 1]] - d0) - a)
+      if (p.hazard[k] > 0) bands.hazard.push({ a, w, c: HAZARD_COLORS[p.hazard[k]] })
+      if (p.comms[k] < 2) bands.radio.push({ a, w, c: p.comms[k] === 0 ? '#d03b3b' : '#fab219' })
+      if (p.sunlit && !p.sunlit[k]) bands.shade.push({ a, w })
+    }
+    const step = len > 900 ? 200 : len > 400 ? 100 : 50
+    const ticks = []
+    for (let d = 0; d <= len + 0.1; d += step) ticks.push(d)
+    return { d0, len, pct, bands, ticks }
+  }, [p, notes, i])
+  if (!plan || !notes?.length) return <Empty text="Plan an EVA to unroll its route as a strip with pace notes." />
+  const pn = notes[i]
+  const say = () => {
+    const synth = window.speechSynthesis
+    if (!synth) { useStore.getState().notify('This browser cannot speak', 'info'); return }
+    synth.cancel()
+    if (speaking) { setSpeaking(false); return }
+    const lines = [`${pn.from} to ${pn.to}, ${Math.round(pn.dist_m)} metres.`, ...pn.notes.map((n) => spoken(n.text))]
+    lines.forEach((t, k) => {
+      const u = new SpeechSynthesisUtterance(t)
+      u.rate = 1.05
+      if (k === lines.length - 1) { u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false) }
+      synth.speak(u)
+    })
+    setSpeaking(true)
+  }
+  const hoverPct = geo && hoverD != null && hoverD >= geo.d0 && hoverD <= geo.d0 + geo.len ? geo.pct(hoverD - geo.d0) : null
+  const onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    set({ hoverD: geo.d0 + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * geo.len })
+  }
+  return (
+    <div className="strip-tab">
+      <div className="strip-main">
+        <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <div>
+            <span className="chart-title">Strip map</span>{' '}
+            <span className="chart-sub">{fmtDist(pn.dist_m)} unrolled · your left is the top edge · hover to find a spot on the map</span>
+          </div>
+          <div className="row" style={{ gap: 6 }}>
+            <select className="input" value={i} onChange={(e) => { window.speechSynthesis?.cancel(); setSpeaking(false); setLeg(+e.target.value) }} aria-label="Leg">
+              {notes.map((L, k) => <option key={k} value={k}>{k + 1}. {L.from} → {L.to}</option>)}
+            </select>
+            <button className={`btn sm ${speaking ? 'on' : ''}`} onClick={say} title="Read the pace notes aloud">
+              {speaking ? <Square size={12} /> : <Volume2 size={13} />} {speaking ? 'Stop' : 'Co-driver'}
+            </button>
+          </div>
+        </div>
+        {geo ? (
+          <div className="strip" onMouseMove={onMove} onMouseLeave={() => set({ hoverD: null })} role="img"
+            aria-label={`Strip map of ${pn.from} to ${pn.to}: ${pn.notes.length} pace notes`}>
+            <span className="strip-lab" style={{ top: 2 }}>RADIO</span>
+            <span className="strip-lab" style={{ top: 15 }}>SHADE</span>
+            <div className="strip-band" style={{ top: 4, height: 7 }}>{geo.bands.radio.map((b, k) => <i key={k} style={{ left: `${b.a}%`, width: `${b.w}%`, background: b.c }} />)}</div>
+            <div className="strip-band" style={{ top: 17, height: 7 }}>{geo.bands.shade.map((b, k) => <i key={k} style={{ left: `${b.a}%`, width: `${b.w}%`, background: '#5b6478' }} />)}</div>
+            <div className="strip-road">{geo.bands.hazard.map((b, k) => <i key={k} style={{ left: `${b.a}%`, width: `${b.w}%`, background: b.c }} />)}</div>
+            {pn.notes.map((n, k) => {
+              const left = geo.pct(n.d)
+              const parts = noteParts(n)
+              // badges of notes close together alternate between two heights so their numbers stay readable
+              const low = k > 0 && left - geo.pct(pn.notes[k - 1].d) < 4.5 && k % 2 === 1
+              return (
+                <React.Fragment key={k}>
+                  <span className="strip-tick" style={{ left: `${left}%`, borderColor: NOTE_COLORS[parts[0].kind] }} />
+                  <span className={`strip-num ${low ? 'low' : ''}`} style={{ left: `${left}%` }}>{k + 1}</span>
+                  {parts.filter((q) => q.kind === 'boulder').map((q, m) => (
+                    <span key={`b${m}`} className="strip-boulder" title={q.text}
+                      style={{ left: `${left}%`, top: q.side === 'left' ? 31 : 82, width: 6 + Math.min(10, q.size * 2), height: 6 + Math.min(10, q.size * 2) }} />
+                  ))}
+                  {parts.filter((q) => q.kind === 'turn').map((q, m) => (
+                    <span key={`t${m}`} className="strip-turn" style={{ left: `${left}%` }} title={q.text}>{q.side === 'left' ? '↰' : '↱'}<small>{q.deg}°</small></span>
+                  ))}
+                  {parts.filter((q) => q.kind === 'climb' || q.kind === 'descent').map((q, m) => (
+                    <span key={`c${m}`} className="strip-turn" style={{ left: `${left}%` }} title={q.text}>{q.kind === 'climb' ? '▲' : '▼'}<small>{q.deg}°</small></span>
+                  ))}
+                </React.Fragment>
+              )
+            })}
+            {geo.ticks.map((d) => <span key={d} className="strip-axis" style={{ left: `${geo.pct(d)}%` }}>{d} m</span>)}
+            {hoverPct != null && <span className="strip-hover" style={{ left: `${hoverPct}%` }} />}
+          </div>
+        ) : <Empty text="This leg is too short for a strip." />}
+        <Legend items={[{ label: 'Boulder (size to scale)', color: '#ff8a3d' }, { label: 'Turn', color: '#4fd1ff' }, { label: 'Radio shadow', color: '#d03b3b' }, { label: 'Terrain shadow', color: '#5b6478' }, { label: 'Hazardous ground', color: HAZARD_COLORS[3] }]} />
+      </div>
+      <ol className="strip-notes scroll" aria-label="Pace notes">
+        {pn.notes.length === 0 && <li className="muted">A clean leg: no notes.</li>}
+        {pn.notes.map((n, k) => (
+          <li key={k} onMouseEnter={() => set({ hoverD: geo ? geo.d0 + n.d : null })} onMouseLeave={() => set({ hoverD: null })}>
+            <b>{k + 1}</b>
+            <span>{n.text}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 const TABS = [
   { id: 'profile', label: 'Elevation profile', icon: Mountain, C: ProfileTab },
+  { id: 'strip', label: 'Strip map', icon: Route, C: StripTab },
   { id: 'timeline', label: 'Timeline & sun', icon: Clock, C: TimelineTab },
   { id: 'consumables', label: 'Suit consumables', icon: Wind, C: ConsumablesTab },
   { id: 'compare', label: 'A* vs Dijkstra', icon: GitCompareArrows, C: CompareTab },

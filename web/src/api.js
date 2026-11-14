@@ -62,6 +62,7 @@ export const api = {
   caches: (id, body) => post(`/api/sites/${id}/caches`, body),
   skylineCheck: (id, params) => j(`/api/sites/${id}/skyline/check?${qs(params)}`),
   gridLines: (id) => j(`/api/sites/${id}/grid-lines`),
+  chemistry: (id, q) => j(`/api/sites/${id}/chemistry${q ? `?${qs(q)}` : ''}`),
   pathHome: (id, params, signal) => j(`/api/sites/${id}/ways-home/path?${qs(params)}`, { signal }),
   file: (id, name) => `/api/sites/${id}/files/${name}`,
   tileUrl: (id, layer, params = {}) => {

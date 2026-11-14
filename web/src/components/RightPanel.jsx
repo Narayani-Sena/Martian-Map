@@ -4,6 +4,8 @@ import { useStore } from '../store.js'
 import { compass } from '../lib/geo.js'
 import { fmtDist, fmtDur, fmtLonLat, fmtNum } from '../lib/format.js'
 import { hms } from '../lib/mars24.js'
+import { api } from '../api.js'
+import ChemBars from './ChemBars.jsx'
 
 const HAZ = ['Easy', 'Moderate', 'Difficult', 'Hazardous', 'No-go']
 const HAZ_TAG = ['ok', 'warn', 'warn', 'bad', 'bad']
@@ -122,6 +124,32 @@ function Uncertainty({ plan }) {
   )
 }
 
+// What the rocks near this point are made of: the rover's chemistry at its closest targets (feature E2).
+function ChemNearby({ info }) {
+  const site = useStore((s) => s.site)
+  const [d, setD] = React.useState(null)
+  React.useEffect(() => {
+    setD(null)
+    if (!site?.chemistry || !info?.inside || info.loading) return undefined
+    let alive = true
+    api.chemistry(site.id, { lon: info.lon, lat: info.lat, n: 2, within_m: 60 }).then((r) => { if (alive) setD(r) }).catch(() => {})
+    return () => { alive = false }
+  }, [site?.id, site?.chemistry, info?.lon, info?.lat, info?.inside, info?.loading])
+  if (!d || !d.targets?.length) return null
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>What the rocks here are made of: {d.instrument}, oxides in weight %</div>
+      {d.targets.map((t) => (
+        <div key={`${t.name}-${t.sol}`} style={{ marginBottom: 6 }}>
+          <div style={{ fontSize: 12 }}><span style={{ color: t.color }}>●</span> <b>{t.name}</b> <span className="muted">sol {t.sol} · {Math.round(t.dist_from_m)} m away · {t.hint}</span></div>
+          <ChemBars t={t} />
+        </div>
+      ))}
+      <div className="muted" style={{ fontSize: 10.5 }}>Each target sits where Curiosity stood that sol (ChemCam reaches about 7 m).</div>
+    </div>
+  )
+}
+
 function PointInfo() {
   const info = useStore((s) => s.pointInfo)
   const set = useStore((s) => s.set)
@@ -159,6 +187,7 @@ function PointInfo() {
         {info.inside && info.science_info?.reasons?.length > 0 && (
           <ul className="issues" style={{ marginTop: 6 }}>{info.science_info.reasons.map((r, k) => <li key={k}><Info size={13} color="var(--accent)" /><span>{r.text}</span></li>)}</ul>
         )}
+        <ChemNearby info={info} />
         {info.inside && info.geology?.interpretation && (
           <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>{info.geology.interpretation} <i>({info.geology.map}, {info.geology.scale})</i></div>
         )}
