@@ -261,7 +261,8 @@ func _process(_delta: float) -> void:
 		_tint_mat.set_shader_parameter("strength", under)
 		_tint_mat.set_shader_parameter("depth_m", maxf(depth_here, 0.0) if is_finite(depth_here) else 0.0)
 	# the banner: in the helmet only while the HUD is up (the HUD-failure drill turns it dark)
-	_banner.visible = on and not app.ui_hidden and (not walk or app.hud.visible)
+	# (a trailer's orbit shots have their own caption in that place)
+	_banner.visible = on and not app.ui_hidden and (not walk or app.hud.visible) and (walk or not str(app.tour).begins_with("trailer"))
 	if not _banner.visible:
 		return
 	var published := _idx >= 0 and _idx < _levels.size() and bool(_levels[_idx].get("published", false))

@@ -4,11 +4,13 @@
 #   .\run_godot.ps1 -Site jezero_threeforks  # open another site
 #   .\run_godot.ps1 -Editor                  # open the project in the Godot editor instead
 #   .\run_godot.ps1 -Trailer [-Site <id>]    # record the hands-free demo to trailer\martian_map_<site>.mp4 (MP4 needs ffmpeg)
+#   .\run_godot.ps1 -Trailer -Short [-Site <id>]   # the 30-second cut (a Space Apps demo video is 30 s): ..._30s.mp4
 # Set $env:GODOT to your Godot executable if it is not found automatically.
 param(
     [ValidateSet("", "low", "medium", "high")][string]$Quality = "",
     [switch]$Editor,
     [switch]$Trailer,
+    [switch]$Short,
     [string]$Site = ""
 )
 $ErrorActionPreference = "Stop"
@@ -37,6 +39,8 @@ if ($Trailer) {
     $out = Join-Path $PSScriptRoot "trailer"
     New-Item -ItemType Directory -Force $out | Out-Null
     $name = if ($Site) { "martian_map_$Site" } else { "martian_map_demo" }
+    if ($Short) { $name += "_30s" }
+    $tourArg = if ($Short) { "--tour=trailer30" } else { "--tour=trailer" }
     $avi = Join-Path $out "$name.avi"
     $shots = Join-Path $env:TEMP "martian_map_trailer"
     New-Item -ItemType Directory -Force $shots | Out-Null
@@ -45,7 +49,7 @@ if ($Trailer) {
     Write-Host "Recording the demo (it runs slower than real time while it records)..."
     $q = { param($v) '"' + $v + '"' }   # Start-Process passes one string: quote the paths with spaces
     $argv = @("--path", (& $q $project), "--resolution", "1600x900", "--write-movie", (& $q $avi), "--fixed-fps", "30",
-        "--", (& $q "--capture=$shots"), "--tour=trailer")
+        "--", (& $q "--capture=$shots"), $tourArg)
     if ($Site) { $argv += "--site=$Site" }
     Start-Process -FilePath $godot -ArgumentList $argv -Wait   # the windowed exe returns at once unless we wait for it
     $ff = Get-Command ffmpeg -ErrorAction SilentlyContinue
@@ -61,7 +65,31 @@ if ($Trailer) {
                 if ($p[0] -eq "end") { $t1 = [double]$p[1] / 30.0 }
             }
         }
-        if ($null -ne $t0 -and $null -ne $t1 -and $t1 -gt $t0) {
+        if ($Short -and (Test-Path $marks)) {
+            # keep 1 s of the title, then every stretch between an "in" and an "out" mark (loading is cut out)
+            $segs = @(, @(0.0, 1.0))
+            $s0 = $null
+            foreach ($l in Get-Content $marks) {
+                $p = $l -split " "
+                $f = [double]$p[1] / 30.0
+                if ($p[0] -eq "in") { $s0 = $f }
+                elseif (($p[0] -eq "out" -or $p[0] -eq "end") -and $null -ne $s0) { $segs += , @($s0, $f); $s0 = $null }
+            }
+            $total = ($segs | ForEach-Object { $_[1] - $_[0] } | Measure-Object -Sum).Sum
+            $k = [Math]::Max(1.0, $total / 29.8)   # a few per cent faster if the shots ran long
+            $inv = [Globalization.CultureInfo]::InvariantCulture
+            $fc = ""; $cat = ""
+            for ($i = 0; $i -lt $segs.Count; $i++) {
+                $a = $segs[$i][0].ToString("0.###", $inv)
+                $b = $segs[$i][1].ToString("0.###", $inv)
+                $fc += "[0:v]trim=start=${a}:end=${b},setpts=PTS-STARTPTS[v$i];[0:a]atrim=start=${a}:end=${b},asetpts=PTS-STARTPTS[a$i];"
+                $cat += "[v$i][a$i]"
+            }
+            $kk = $k.ToString("0.####", $inv)
+            $fc += "${cat}concat=n=$($segs.Count):v=1:a=1[cv][ca];[cv]setpts=PTS/${kk}[v];[ca]atempo=${kk}[a]"
+            & $ff.Source -y -loglevel error -i $avi -filter_complex $fc -map "[v]" -map "[a]" @enc $mp4
+            Write-Host ("30-second cut: {0} shots from {1:0.0} s of footage, played x{2}" -f ($segs.Count - 1), $total, $kk)
+        } elseif ($null -ne $t0 -and $null -ne $t1 -and $t1 -gt $t0) {
             $inv = [Globalization.CultureInfo]::InvariantCulture
             $s = $t0.ToString("0.###", $inv)
             $e = $t1.ToString("0.###", $inv)

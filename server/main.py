@@ -53,6 +53,7 @@ from . import debrief as debrieflib
 from . import export3d
 from . import radar as radarlib
 from . import thennow as thennowlib
+from . import trackcheck
 from . import patch as patchlib
 from . import postcard as postcardlib
 from . import rover as pr
@@ -412,10 +413,13 @@ def _layer_catalog(site) -> list[dict]:
     for kind, c in site.crism.items():
         m = c["meta"]
         bands = m.get("bands", [])
+        moved = [math.hypot(*p["shift_m"]) for p in m.get("products", []) if any(p.get("shift_m") or [])]
+        reg = (f", each lined up with the HiRISE mosaic by phase correlation ({len(moved)} moved "
+               f"{min(moved):.0f}-{max(moved):.0f} m from where the archive places them)" if moved else "")
         L.append({"id": f"crism_{kind}", "name": m.get("name", f"CRISM {kind}"), "group": "Spectral (CRISM)", "default_opacity": 0.85,
                   "about": m.get("about", ""), "bands": bands,
                   "legend": {"unit": " · ".join(f"{ch} = {b}" for ch, b in zip("RGB", bands)), "stops": [[i, colors[i]] for i in range(len(bands[:3]))]},
-                  "source": f"MRO CRISM MTRDR ({len(m.get('products', []))} observations, 18-36 m pixels)"})
+                  "source": f"MRO CRISM MTRDR ({len(m.get('products', []))} observations, 18-36 m pixels{reg})"})
     return L
 
 
@@ -453,7 +457,7 @@ def site_info(site_id: str):
     files = sorted(p.name for p in s.dir.iterdir() if p.suffix in (".jpg", ".png", ".geojson"))
     return {
         "id": site_id, "name": cfg["name"], "short_name": cfg.get("short_name"), "region": cfg.get("region"),
-        "mission": cfg["mission"], "rover_name": cfg.get("rover_name"), "story": cfg.get("story"),
+        "scene": cfg.get("scene"), "mission": cfg["mission"], "rover_name": cfg.get("rover_name"), "story": cfg.get("story"),
         "bounds": [[lat_min, lon_min], [lat_max, lon_max]],
         "center": {"lon": g.lon0, "lat": g.lat0},
         "grid": meta["grid_1m"], "grid2": meta["grid_2m"], "grid4": meta["grid_4m"],
@@ -1834,6 +1838,18 @@ def radar_atlas(site_id: str):
     if not p.exists():
         raise HTTPException(404, "no radar for this site")
     return FileResponse(p, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/api/sites/{site_id}/rover-check")
+def rover_check(site_id: str, tolerance_m: float = Query(2.0, ge=0, le=10), flat_speed: float | None = None,
+                max_slope: float | None = None, caution_slope: float | None = None, max_rough: float | None = None,
+                sand_penalty: float | None = None, hazard_aversion: float | None = None, load_kg: float | None = None):
+    """Ground truth from the rover: the share of the rover's real drive inside the site that our walking map calls
+    passable, per hazard class against the whole site, the no-go metres and their causes (server/trackcheck.py)."""
+    s = _site(site_id)
+    q = dict(flat_speed=flat_speed, max_slope=max_slope, caution_slope=caution_slope, max_rough=max_rough,
+             sand_penalty=sand_penalty, hazard_aversion=hazard_aversion, load_kg=load_kg)
+    return trackcheck.check(s, _walk_from_query(q), tolerance_m)
 
 
 @app.get("/api/sites/{site_id}/radar/run/{run}.png")

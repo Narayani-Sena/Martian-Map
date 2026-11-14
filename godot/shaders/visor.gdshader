@@ -2,7 +2,9 @@
 // that drifts as you turn your head, breath condensation, power-on flicker and alert glitches.
 shader_type canvas_item;
 
-uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+// No mipmaps: with a mipmapped screen texture the engine blurs the whole screen into a mip chain every frame,
+// although only fogged pixels need a blur. Those take a small ring of samples instead (blur_ring below).
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform float strength = 1.0;
 uniform float aberration = 0.0022;
 uniform float vignette = 0.8;
@@ -16,6 +18,18 @@ uniform vec4 alarm : source_color = vec4(1.0, 0.25, 0.2, 0.0);
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// A soft blur around p from two rings of samples (about the look of mip level 4.5 at 1600 px wide).
+vec3 blur_ring(vec2 p) {
+	vec3 s = textureLod(screen_tex, p, 0.0).rgb * 0.12;
+	for (int i = 0; i < 8; i++) {
+		float a = float(i) * 0.7853982 + 0.39;
+		vec2 d = vec2(cos(a), sin(a) * 1.78);
+		s += textureLod(screen_tex, p + d * 0.007, 0.0).rgb * 0.055;
+		s += textureLod(screen_tex, p + d * 0.015, 0.0).rgb * 0.055;
+	}
+	return s;
 }
 
 void fragment() {
@@ -36,7 +50,7 @@ void fragment() {
 	float fm = fog * smoothstep(0.5, 1.0, uv.y) * (0.65 + 0.35 * sin(uv.x * 7.0 + TIME * 0.6));
 	fm += dust * 0.35 * smoothstep(0.35, 0.9, length(c * vec2(1.6, 1.0)));
 	if (fm > 0.002) {
-		vec3 blurred = textureLod(screen_tex, duv, 4.5).rgb;
+		vec3 blurred = blur_ring(duv);
 		col = mix(col, blurred * 1.08 + vec3(0.035, 0.035, 0.04), clamp(fm, 0.0, 0.85));
 	}
 	col = mix(col, tint.rgb, tint.a * strength);

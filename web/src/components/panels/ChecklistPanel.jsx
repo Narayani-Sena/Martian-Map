@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Award, Box, Download, Printer } from 'lucide-react'
-import { missionBody, useStore } from '../../store.js'
+import { UI_CHATTER, missionBody, useStore, useStoreExcept } from '../../store.js'
 import { buildChecklist } from '../checklist.js'
 import { openPlanDoc } from '../../lib/docs.js'
 import { fmtDist, fmtDur, fmtUtc } from '../../lib/format.js'
@@ -126,7 +126,7 @@ function MissionPatch() {
 }
 
 export default function ChecklistPanel() {
-  const state = useStore()
+  const state = useStoreExcept(UI_CHATTER)
   const cl = buildChecklist(state.plan, state)
   if (!cl) return <div className="muted">Plan an EVA to generate its cuff checklist.</div>
   const t = cl.totals

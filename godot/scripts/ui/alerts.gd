@@ -11,6 +11,7 @@ signal glitch(amount: float)
 signal list_requested
 
 var helmet := false        # the helmet HUD shows the alert itself: the big banner steps aside sooner
+var muted := false         # no toasts (trailer recordings: the captions tell the story)
 var _banner: PanelContainer
 var _banner_title: Label
 var _banner_text: Label
@@ -191,6 +192,8 @@ func _process(_d: float) -> void:
 
 
 func toast(text: String, kind := "info") -> void:
+	if muted:
+		return
 	var col: Color = {"info": UiKit.ACCENT, "ok": UiKit.GOOD, "warn": UiKit.CAUTION, "bad": UiKit.BAD, "advisory": UiKit.ADVISORY}.get(kind, UiKit.ACCENT)
 	var p := PanelContainer.new()
 	p.material = UiKit.glass_material(2.5)

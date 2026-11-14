@@ -112,6 +112,7 @@ func show_photo(p: Dictionary) -> void:
 	_cam.global_transform = Transform3D(Basis.looking_at(dir, up), pos)
 	_cam.current = true
 	active = true
+	world.crew_hidden = true      # EV2 would stand a few metres in front of the lens
 	app.hud.visible = false
 	app.ui.visible = false        # alerts, toasts and panels step aside
 	app.visor.visible = false     # and the visor's dust
@@ -138,6 +139,7 @@ func stop() -> void:
 	if _cam:
 		_cam.current = false
 	world.camera.current = true
+	world.crew_hidden = false
 	app.ui.visible = true
 	app.visor.visible = Settings.visor_fx and world.mode == "walk"
 	if world.dust:

@@ -49,7 +49,8 @@ func play() -> void:
 	var me := _run_id
 	_ignore_until = Time.get_ticks_msec() + 500   # the click on DEMO itself
 	_saved = {"speed": Mission.speed_index, "t": Mission.eva_t, "follow": shell.follow_crew, "auto_rotate": world.orbit.auto_rotate}
-	shell.alerts.toast("Demo: sit back. Any key, click or stick hands the controls back.", "info")
+	if not _recording():
+		shell.alerts.toast("Demo: sit back. Any key, click or stick hands the controls back.", "info")
 	var stops: Array = []
 	var walks: Array = []
 	for e in Mission.plan["events"]:
@@ -76,7 +77,7 @@ func play() -> void:
 	shot = "overview"
 	world.home_view()
 	world.orbit.auto_rotate = true
-	_say("2 / 6 · The plan", "Gale crater's boxwork ridges on HiRISE 1 m terrain. The cyan route links the science stations; the rings show how long the walk back to the habitat takes from anywhere.")
+	_say("2 / 6 · The plan", "%s on HiRISE 1 m terrain. The cyan route links the science stations; the rings show how long the walk back to the habitat takes from anywhere." % _scene())
 	if not await _hold(me, 6.5):
 		return
 
@@ -147,6 +148,116 @@ func play() -> void:
 	stop(false)
 
 
+## The 30-second cut (run_godot.ps1 -Trailer -Short; a Space Apps demo video is at most 30 s long): the same story
+## in fewer, shorter shots with one line each and larger type. The "in" and "out" marks tell the launcher which
+## stretches of the recording to keep, so mode switches and loading never show.
+func play_short() -> void:
+	if running or not Mission.has_plan() or not world.ready_terrain:
+		return
+	running = true
+	_run_id += 1
+	var me := _run_id
+	_ignore_until = Time.get_ticks_msec() + 500
+	_saved = {"speed": Mission.speed_index, "t": Mission.eva_t, "follow": shell.follow_crew, "auto_rotate": world.orbit.auto_rotate}
+	_big(true)
+	var walks: Array = []
+	for e in Mission.plan["events"]:
+		if str(e.get("kind", "")) == "walk":
+			walks.append(e)
+	if world.mode == "walk":
+		shell._set_mode("orbit")
+		if not await _hold(me, 1.6):
+			return
+	Mission.set_playing(false)
+
+	# the layers lift off the terrain (a little faster than in the full demo)
+	shell._trailer_mark("in")
+	if shell.tower != null:
+		shot = "tower"
+		_say("Martian Map · %s" % _scene(), "Every NASA layer behind the map, lifted off the ground.")
+		Engine.time_scale = 1.7
+		await shell.play_tower(0.9, false)
+		Engine.time_scale = 1.0
+		if me != _run_id or not running:
+			return
+
+	# the plan from above
+	shot = "overview"
+	world.home_view()
+	world.orbit.auto_rotate = true
+	_say("Plan the walk", "Route, stations, and the minutes home from anywhere.")
+	if not await _hold(me, 2.6):
+		return
+
+	# behind the crew
+	shot = "chase"
+	var t0 := float(walks[0]["t0"]) + 45.0 if not walks.is_empty() else 0.0
+	Mission.set_time(t0)
+	var st := Mission.state_at(t0)
+	var p0: Vector2 = st["xy"]
+	var dir0: Vector2 = (st.get("xy_ahead", p0) as Vector2) - p0
+	var yaw0: float = -atan2(dir0.x, dir0.y) if dir0.length() > 0.5 else world.orbit.yaw
+	world.orbit.auto_rotate = false
+	world.orbit.fly_to(world.td.world_at(p0), CHASE_DIST, yaw0, deg_to_rad(CHASE_PITCH), 1.4)
+	_say("Walk it", "EV1 and EV2 on the route, their suits draining as they go.")
+	if not await _hold(me, 1.4):
+		return
+	shell.follow_crew = true
+	shell.dock.set_follow(true)
+	Mission.speed_index = 1
+	Mission.set_playing(true)
+	_chase = true
+	if not await _hold(me, 2.6):
+		return
+	_chase = false
+
+	# into the helmet (the switch itself is cut out)
+	shot = "helmet"
+	shell._trailer_mark("out")
+	Mission.set_playing(false)
+	var walk_ev: Dictionary = walks[mini(1, walks.size() - 1)] if not walks.is_empty() else {}
+	if not walk_ev.is_empty():
+		Mission.set_time(maxf(float(walk_ev["t0"]), float(walk_ev["t1"]) - 130.0))
+	shell._set_mode("walk")
+	if not await _hold(me, 1.4):
+		return
+	Mission.speed_index = 1
+	Mission.set_playing(true)
+	if not await _hold(me, 0.3):
+		return
+	shell._trailer_mark("in")
+	_say("In the helmet", "Oxygen, the next stop, the walk home and the radio, on the visor.")
+	if not await _hold(me, 3.3):
+		return
+	shell._trailer_mark("out")
+	Mission.set_playing(false)
+	shell._set_mode("orbit")
+	if not await _hold(me, 1.2):
+		return
+	stop(false)
+
+
+## The site in a few words, for the captions ("Gale crater's boxwork ridges").
+func _scene() -> String:
+	var sc = Mission.site.get("scene")
+	if sc is String and sc != "":
+		return sc
+	return str(Mission.site.get("short_name", Mission.site.get("name", "The site")))
+
+
+## Trailer recordings leave the demo's own toasts out.
+func _recording() -> bool:
+	return str(shell.tour).begins_with("trailer")
+
+
+## Larger captions for the 30-second cut, read at a glance on a small video.
+func _big(on: bool) -> void:
+	_cap_title.add_theme_font_size_override("font_size", 17 if on else maxi(13, UiKit.MIN_FONT))
+	_cap_text.add_theme_font_size_override("font_size", 22 if on else maxi(14, UiKit.MIN_FONT))
+	_caption.custom_minimum_size = Vector2(660 if on else 560, 0)
+	_cap_text.custom_minimum_size = Vector2(630 if on else 530, 0)
+
+
 ## Ends the demo: by_user = someone took the controls. Playback stops; speed and follow go back.
 func stop(by_user := true) -> void:
 	if not running:
@@ -169,7 +280,9 @@ func stop(by_user := true) -> void:
 	var tw := _caption.create_tween()
 	tw.tween_property(_caption, "modulate:a", 0.0, 0.3)
 	tw.tween_callback(func(): _caption.visible = false)
-	shell.alerts.toast("Demo stopped — you have the controls." if by_user else "Demo over — the console is yours.", "ok")
+	_big(false)
+	if not _recording():
+		shell.alerts.toast("Demo stopped — you have the controls." if by_user else "Demo over — the console is yours.", "ok")
 	ended.emit(by_user)
 
 

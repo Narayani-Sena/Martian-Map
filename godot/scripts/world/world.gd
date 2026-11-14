@@ -90,6 +90,7 @@ var show_route := true
 var show_traverse := true
 var show_heli := true
 var show_rings := false
+var _rings_stale := true   # the plan changed since the rings were draped
 var show_labels := true
 
 var _blend := 1.0
@@ -105,6 +106,7 @@ var _buddy_d := -1.0              # EV2's distance along the planned route (auto
 var _buddy_vel := Vector2.ZERO    # smoothed velocity (m/s): EV2 faces the way it walks
 var _buddy_still := 0.0           # seconds EV2 has stood still (then it turns to look at you)
 var _buddy_side := 0.0            # 0..1: stepping aside from the route while working at a stop
+var crew_hidden := false          # both astronauts off screen (then-and-now stands a camera where they would be)
 var _last_shadow_mode := ""
 var _tweens := {}
 var label_hit: Callable           # screen point -> label dict ({} = none); set by the UI (Callouts.hit)
@@ -608,7 +610,9 @@ func _on_plan_changed() -> void:
 	_build_drive()
 	_update_marker_rings()
 	_build_crumbs(pts)
-	_build_rings()
+	_rings_stale = true
+	if show_rings:
+		_build_rings()
 	_on_time(Mission.eva_t)
 	var route_len := 0.0
 	for i in range(1, pts.size()):
@@ -736,6 +740,10 @@ func _build_crumbs(pts: PackedVector3Array) -> void:
 
 
 func _build_rings() -> void:
+	_rings_stale = false
+	if rings_mi:
+		rings_mi.queue_free()
+		rings_mi = null
 	var rings: Variant = Mission.plan.get("rings")
 	if not (rings is Dictionary):
 		return
@@ -813,6 +821,7 @@ func set_time_unix(unix: float, force := false) -> void:
 	sun.light_color = Color(1.0, 0.86 + 0.1 * daylight, 0.72 + 0.2 * daylight)
 	sun.visible = s > -0.03
 	moonlight.light_energy = 0.1 * (1.0 - daylight)
+	moonlight.visible = moonlight.light_energy > 0.002
 	env.ambient_light_energy = 0.18 + 0.3 * daylight
 	env.fog_light_color = _horizon_color(sp.x)
 	env.tonemap_exposure = lerpf(1.6, 0.92, daylight)
@@ -1004,7 +1013,7 @@ func _build_obstacles() -> void:
 			_pr_obstacle = i
 	if rover_node:
 		var c := Vector2(rover_node.position.x, -rover_node.position.z)
-		_add_obstacle("Curiosity", c, c, 2.1, Vector2.RIGHT)
+		_add_obstacle(str(Mission.site.get("rover_name", "The rover")), c, c, 2.1, Vector2.RIGHT)
 	walker.structures = obstacles
 
 
@@ -1309,6 +1318,8 @@ func set_layer_visible(what: String, on: bool) -> void:
 				heli_ground_mi.visible = on
 		"rings":
 			show_rings = on
+			if on and _rings_stale and Mission.has_plan():
+				_build_rings()
 			if rings_mi:
 				rings_mi.visible = on and mode == "orbit"
 		"labels":
@@ -1536,6 +1547,10 @@ func _ease_in_out(x: float) -> float:
 
 func _update_crew(delta: float) -> void:
 	if crew.size() < 2:
+		return
+	if crew_hidden:
+		for a in crew:
+			(a as Node3D).visible = false
 		return
 	var has := Mission.has_plan()
 	var st := Mission.state_at(Mission.eva_t) if has else {}

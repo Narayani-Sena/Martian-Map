@@ -1,9 +1,83 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { useStore } from '../../store.js'
+import { api, walkParams } from '../../api.js'
 
 const A = ({ href, children }) => <a href={href} target="_blank" rel="noreferrer">{children} <ExternalLink size={10} style={{ verticalAlign: -1 }} /></a>
 const pct = (v) => `${Math.round(v * 100)} %`
+
+// Hazard classes, easy to no-go: the map's own legend colours, re-stepped so neighbours stay apart on the dark panel.
+const CLASS_COLORS = ['#2f9e5b', '#fab219', '#e86a2e', '#c22a3c', '#9b30c8']
+const CLASS_NAMES = ['Easy', 'Moderate', 'Difficult', 'Hazardous', 'No-go']
+
+function ShareBar({ label, shares, other, otherLabel }) {
+  return (
+    <div className="share-row">
+      <span className="share-label">{label}</span>
+      <div className="share-bar" role="img" aria-label={`${label}: ${shares.map((v, i) => `${CLASS_NAMES[i]} ${(v * 100).toFixed(1)} %`).join(', ')}`}>
+        {shares.map((v, i) => v > 0.0005 && (
+          <span key={i} className="share-seg" style={{ flexGrow: v, background: CLASS_COLORS[i] }}
+            title={`${CLASS_NAMES[i]}: ${(v * 100).toFixed(1)} % ${label.toLowerCase()} (${(other[i] * 100).toFixed(1)} % ${otherLabel})`}>
+            {v >= 0.12 && <i>{Math.round(v * 100)} %</i>}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Ground truth from the rover (server/trackcheck.py): the rover only drove where its team judged the ground safe.
+function RoverCheck() {
+  const siteId = useStore((s) => s.siteId)
+  const walk = useStore((s) => s.walk)
+  const key = JSON.stringify(walkParams(walk))
+  const [r, setR] = useState(null)
+  const [err, setErr] = useState(null)
+  useEffect(() => {
+    const ac = new AbortController()
+    setR(null)
+    setErr(null)
+    const t = setTimeout(() => {
+      api.roverCheck(siteId, walkParams(walk), ac.signal).then(setR).catch((e) => { if (e.name !== 'AbortError') setErr(e.message) })
+    }, 250)
+    return () => { clearTimeout(t); ac.abort() }
+  }, [siteId, key]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (err) return <p className="dim" style={{ fontSize: 12, margin: 0 }}>The check could not run: {err}</p>
+  if (!r) return <p className="dim" style={{ fontSize: 12, margin: 0 }}>Laying the rover's drive over the hazard map…</p>
+  if (!r.available) return <p className="dim" style={{ fontSize: 12, margin: 0 }}>{r.note}</p>
+  const WHY = { slope: 'steep 2 m cells, mostly on ridge flanks where a metre of position error matters', boulder: 'boulders the shadow detector may have over-sized', roughness: 'rough cells', 'crew tag': 'ground tagged as a hazard by the crew' }
+  const causes = Object.entries(r.nogo_m_by_cause || {}).map(([k, v]) => `${Math.round(v)} m of ${WHY[k] || k}`).join('; ')
+  return (
+    <div className="card rover-check" style={{ fontSize: 12, lineHeight: 1.55 }}>
+      <div className="check-stats">
+        <div><b>{(r.passable_share * 100).toFixed(1)} %</b><span>of {r.rover}'s {(r.track_m / 1000).toFixed(2)} km of drive is walkable on our map</span></div>
+        {r.nogo_rarity && <div><b>{r.nogo_rarity >= 10 ? Math.round(r.nogo_rarity) : r.nogo_rarity.toFixed(1)}×</b><span>rarer: no-go ground under the wheels, against the whole site</span></div>}
+      </div>
+      <ShareBar label="Rover's track" shares={r.track_share} other={r.site_share} otherLabel="of the site" />
+      <ShareBar label="Whole site" shares={r.site_share} other={r.track_share} otherLabel="of the track" />
+      <div className="share-legend">
+        {CLASS_NAMES.map((n, i) => <span key={n}><i style={{ background: CLASS_COLORS[i] }} />{n}</span>)}
+      </div>
+      <p className="dim" style={{ margin: '8px 0 0' }}>
+        A rover only drives where its team judged the ground safe, so its track is ground known to be crossable.
+        Allowing {r.tolerance_m} m for position error, {(r.passable_share_tolerant * 100).toFixed(1)} % of it is walkable.
+        {causes ? ` What it calls no-go: ${causes} (the longest stretch is ${Math.round(r.longest_nogo_m)} m).` : ''}
+        {' '}Limits used: slopes over {r.limits.max_slope_deg}°, roughness over {r.limits.max_rough_m} m and boulders of {r.limits.boulder_no_go_m} m are no-go (the Suit panel changes them).
+      </p>
+      <details className="share-table">
+        <summary>Numbers</summary>
+        <table>
+          <thead><tr><th>Class</th><th>Track</th><th>Site</th></tr></thead>
+          <tbody>
+            {CLASS_NAMES.map((n, i) => (
+              <tr key={n}><td>{n}</td><td>{(r.track_share[i] * 100).toFixed(1)} %</td><td>{(r.site_share[i] * 100).toFixed(1)} %</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </div>
+  )
+}
 
 export default function AboutPanel() {
   const site = useStore((s) => s.site)
@@ -34,6 +108,10 @@ export default function AboutPanel() {
           <div><b>Space weather</b> — <A href="https://ccmc.gsfc.nasa.gov/tools/DONKI/">NASA DONKI</A> (WSA-ENLIL Mars arrivals, flares, SEPs)</div>
           <div><b>Time & sun</b> — our implementation of NASA GISS <A href="https://www.giss.nasa.gov/tools/mars24/help/algorithm.html">Mars24</A></div>
         </div>
+      </div>
+      <div className="section">
+        <h3>Checked against the rover's real drive</h3>
+        <RoverCheck />
       </div>
       <div className="section">
         <h3>How it works</h3>

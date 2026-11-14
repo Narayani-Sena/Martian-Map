@@ -6,6 +6,7 @@ extends Control
 var heading := 0.0
 var markers: Array = []   # {bearing, label, color, sub}
 const SPAN := 130.0
+var _hb_box := UiKit.box(Color(0.02, 0.03, 0.04, 0.7), Color(UiKit.ACCENT, 0.7), 4, 1, 2)   # the heading readout's box (built once)
 
 
 func _init() -> void:
@@ -53,6 +54,6 @@ func _draw() -> void:
 			draw_colored_polygon(PackedVector2Array([Vector2(x2, y), Vector2(x2 + 6, y + 6), Vector2(x2, y + 12), Vector2(x2 - 6, y + 6)]), col)
 			draw_string(f, Vector2(x2 - 70, y + 24), str(mk.get("label", "")), HORIZONTAL_ALIGNMENT_CENTER, 140, UiKit.MIN_FONT, Color(col, 0.95))
 	var hb := Rect2(cx - 38, base + 4, 76, 22)
-	draw_style_box(UiKit.box(Color(0.02, 0.03, 0.04, 0.7), Color(UiKit.ACCENT, 0.7), 4, 1, 2), hb)
+	draw_style_box(_hb_box, hb)
 	draw_string(m, Vector2(hb.position.x, hb.position.y + 16), "%03d° %s" % [int(round(fposmod(heading, 360.0))) % 360, Geo.compass(heading)], HORIZONTAL_ALIGNMENT_CENTER, hb.size.x, 13, UiKit.TEXT)
 	draw_colored_polygon(PackedVector2Array([Vector2(cx - 6, base - 1), Vector2(cx + 6, base - 1), Vector2(cx, base + 5)]), UiKit.ACCENT)

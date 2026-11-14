@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { create } from 'zustand'
 
 const LS_KEY = (siteId) => `martian-map:mission:${siteId}`
@@ -17,6 +18,7 @@ export const useStore = create((set, get) => ({
   // ------------------------------------------------------------ view
   mode: 'plan', // plan | 3d | walk
   panel: 'mission', // left panel id, or null when collapsed
+  tourStep: null, // guided tour (components/GuidedTour.jsx): the step shown, or null
   summaryOpen: false, // tablets: the EVA summary slides over the map (desktop shows it all the time)
   drawer: 'profile', // bottom drawer tab, or null when collapsed
   base: 'hirise',
@@ -204,6 +206,27 @@ export const missionBody = (s) => ({
 export const havenName = (plan) => (plan?.rover?.enabled ? plan.rover.name || 'the rover' : 'the hab')
 
 // Every place the crew can walk home to: the hab, PR-2 parked at its drop-off, and any caches (feature A1, B4).
+// Keys that change many times a second (the chart hover writes hoverD on every mouse move) or that only the shell reads.
+export const UI_CHATTER = ['hoverD', 'toast', 'tourStep', 'walkT', 'walkPlaying', 'walkSpeed']
+
+// The whole store, for a big view that reads many keys, but without re-rendering it when only `ignore` keys change.
+// Pass only keys the caller never reads: in what this returns they may be stale.
+export function useStoreExcept(ignore) {
+  const prev = useRef(null)
+  return useStore((s) => {
+    const p = prev.current
+    if (p && p !== s) {
+      let same = true
+      for (const k in s) {
+        if (s[k] !== p[k] && !ignore.includes(k)) { same = false; break }
+      }
+      if (same) return p
+    }
+    prev.current = s
+    return s
+  })
+}
+
 export function havensList(s) {
   const out = [{ lon: s.habitat.lon, lat: s.habitat.lat, name: 'Hab' }]
   const drop = s.rover?.enabled ? (s.rover.dropoff || s.plan?.rover?.dropoff) : null

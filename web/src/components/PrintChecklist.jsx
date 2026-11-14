@@ -1,11 +1,11 @@
 import React from 'react'
-import { useStore } from '../store.js'
+import { UI_CHATTER, useStoreExcept } from '../store.js'
 import { buildChecklist } from './checklist.js'
 import { fmtDist, fmtDur, fmtUtc } from '../lib/format.js'
 
 // Rendered only for window.print(): a two-column, black-on-white cuff checklist.
 export default function PrintChecklist() {
-  const state = useStore()
+  const state = useStoreExcept(UI_CHATTER)
   const cl = buildChecklist(state.plan, state)
   if (!cl) return null
   const t = cl.totals

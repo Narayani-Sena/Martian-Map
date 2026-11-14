@@ -6,6 +6,7 @@ extends Control
 var world: MarsWorld
 var selected := ""
 var _hits: Array = []      # labels drawn this frame, nearest first: {id, kind, title, sub, pos, rect}
+var _bg := UiKit.box(Color.BLACK, Color.WHITE, 5, 1, 4)   # one tag background, recoloured for each tag as it is drawn
 
 
 func _init() -> void:
@@ -81,8 +82,10 @@ func _draw() -> void:
 		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 260.0)
 		if sel:
 			draw_arc(gp, 8.0 + pulse * 6.0, 0, TAU, 32, Color(col, 0.7 * (1.0 - pulse)), 2.0, true)
-		var bg := UiKit.box(Color(0.02, 0.03, 0.045, 0.78 * a) if not hov else Color(col.darkened(0.7), 0.9 * a), Color(col, (0.95 if sel or hov else 0.55) * a), 5, 2 if sel or hov else 1, 4)
-		draw_style_box(bg, rect)
+		_bg.bg_color = Color(0.02, 0.03, 0.045, 0.78 * a) if not hov else Color(col.darkened(0.7), 0.9 * a)
+		_bg.border_color = Color(col, (0.95 if sel or hov else 0.55) * a)
+		_bg.set_border_width_all(2 if sel or hov else 1)
+		draw_style_box(_bg, rect)   # drawn at once, so the same box can be recoloured for the next tag
 		draw_rect(Rect2(rect.position.x, rect.position.y + 4, 3, h - 8), Color(col, a))
 		draw_string(ft, rect.position + Vector2(11, 15), title, HORIZONTAL_ALIGNMENT_LEFT, w - 14, tsz, Color(UiKit.TEXT, a))
 		var dist_txt := "  ·  " + Geo.fmt_dist(Vector2(pos.x - cp.x, pos.z - cp.z).length()) if walk else ""

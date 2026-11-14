@@ -13,6 +13,9 @@ var cme: Array = []   # DONKI arrivals: t_rel_s (forecast), t0_rel_s / t1_rel_s 
 var shade: Array = []  # stretches walked in terrain shadow: t0, t1 (seconds after the start)
 var _hover := NAN
 var _drag := false
+var _head: Control      # the playhead and the hover tip, drawn on their own layer: moving them never redraws the bar
+var _active := -2       # the event under the playhead (the bar is redrawn only when this changes)
+var _tip_box := UiKit.box(UiKit.PANEL_SOLID, Color(UiKit.ACCENT, 0.5), 4, 1, 4)
 
 const KIND_COLORS := {"egress": Color("b48cff"), "ingress": Color("b48cff"), "walk": Color("4fd1ff"), "stop": Color("ffb03b"), "drive": Color("4ade80")}
 
@@ -21,6 +24,11 @@ func _init() -> void:
 	custom_minimum_size = Vector2(200, 46)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_head = Control.new()
+	_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_head.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_head.draw.connect(_draw_head)
+	add_child(_head)
 
 
 func set_plan(evs: Array, total_s: float, sunset := NAN, arrivals: Array = [], shaded: Array = []) -> void:
@@ -29,12 +37,27 @@ func set_plan(evs: Array, total_s: float, sunset := NAN, arrivals: Array = [], s
 	sunset_t = sunset
 	cme = arrivals
 	shade = shaded
+	_active = _active_index(t)
 	queue_redraw()
+	_head.queue_redraw()
 
 
 func set_time(v: float) -> void:
+	if v == t:
+		return
 	t = v
-	queue_redraw()
+	var ai := _active_index(v)
+	if ai != _active:   # the highlighted block changes only at event boundaries
+		_active = ai
+		queue_redraw()
+	_head.queue_redraw()
+
+
+func _active_index(tt: float) -> int:
+	for i in events.size():
+		if tt >= float(events[i]["t0"]) and tt < float(events[i]["t1"]):
+			return i
+	return -1
 
 
 func _x(tt: float) -> float:
@@ -109,18 +132,26 @@ func _draw() -> void:
 		var sx := _x(sunset_t)
 		draw_line(Vector2(sx, 0), Vector2(sx, y0 + h + 4), UiKit.BAD, 2.0)
 		draw_string(f, Vector2(sx - 52, y0 + h + 15), "SUNSET", HORIZONTAL_ALIGNMENT_RIGHT, 48, UiKit.MIN_FONT, UiKit.BAD)   # over the real terrain
+
+
+func _draw_head() -> void:
+	if events.is_empty():
+		return
+	var y0 := 4.0
+	var h := 20.0
+	var f := UiKit.font(600)
 	var px := _x(t)
-	draw_rect(Rect2(px - 4, 0, 8, y0 + h + 4), Color(1, 1, 1, 0.1))
-	draw_line(Vector2(px, 0), Vector2(px, y0 + h + 4), Color.WHITE, 2.0)
-	draw_colored_polygon(PackedVector2Array([Vector2(px - 6, 0), Vector2(px + 6, 0), Vector2(px, 7)]), Color.WHITE)
+	_head.draw_rect(Rect2(px - 4, 0, 8, y0 + h + 4), Color(1, 1, 1, 0.1))
+	_head.draw_line(Vector2(px, 0), Vector2(px, y0 + h + 4), Color.WHITE, 2.0)
+	_head.draw_colored_polygon(PackedVector2Array([Vector2(px - 6, 0), Vector2(px + 6, 0), Vector2(px, 7)]), Color.WHITE)
 	if not is_nan(_hover):
 		var hx := _x(_hover)
-		draw_line(Vector2(hx, y0), Vector2(hx, y0 + h), Color(1, 1, 1, 0.5), 1.0)
+		_head.draw_line(Vector2(hx, y0), Vector2(hx, y0 + h), Color(1, 1, 1, 0.5), 1.0)
 		var txt := "%s  %s" % [MarsTime.clock(_hover), _event_name(_hover)]
 		var w := f.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x + 14
 		var bx := clampf(hx - w * 0.5, 0, size.x - w)
-		draw_style_box(UiKit.box(UiKit.PANEL_SOLID, Color(UiKit.ACCENT, 0.5), 4, 1, 4), Rect2(bx, y0 + h + 2, w, 18))
-		draw_string(f, Vector2(bx + 7, y0 + h + 15), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, UiKit.TEXT)
+		_head.draw_style_box(_tip_box, Rect2(bx, y0 + h + 2, w, 18))
+		_head.draw_string(f, Vector2(bx + 7, y0 + h + 15), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, UiKit.TEXT)
 
 
 func _event_name(tt: float) -> String:
@@ -145,7 +176,7 @@ func _gui_input(event: InputEvent) -> void:
 		_hover = clampf((event as InputEventMouseMotion).position.x / maxf(size.x, 1.0), 0.0, 1.0) * total
 		if _drag:
 			scrubbed.emit(_hover)
-		queue_redraw()
+		_head.queue_redraw()
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		_drag = (event as InputEventMouseButton).pressed
 		if _drag:
@@ -157,4 +188,4 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_MOUSE_EXIT:
 		_hover = NAN
 		_drag = false
-		queue_redraw()
+		_head.queue_redraw()

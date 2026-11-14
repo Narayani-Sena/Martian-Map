@@ -4,6 +4,7 @@ import { hms, ltst, marsTime } from '../../lib/mars24.js'
 import { fmtDur } from '../../lib/format.js'
 import WaysHomeInfo from './WaysHomeInfo.jsx'
 import LakeControl from './LakeControl.jsx'
+import { ProvChip, ProvKey, VECTOR_PROV, layerProv } from '../../lib/provenance.jsx'
 
 function Legend({ legend }) {
   if (!legend) return null
@@ -104,6 +105,7 @@ export default function LayersPanel() {
         {site.team_dem && (
           <p className="hint">JPL's mosaics, rover tracks and samples use the {site.rover_name} team's map frame, which sits {Math.round(site.team_dem.shift_m)} m from our USGS terrain model; they are shifted onto it (measured by matching the two terrain models).</p>
         )}
+        <ProvKey />
       </div>
 
       {Object.entries(groups).map(([group, list]) => (
@@ -114,7 +116,7 @@ export default function LayersPanel() {
             return (
               <div key={L.id} className={`layer ${st.on ? 'on' : ''}`}>
                 <div className="row between">
-                  <label className="grow" style={{ fontWeight: 600 }} onClick={() => setLayer(L.id, { on: !st.on })}>{L.name}</label>
+                  <label className="grow" style={{ fontWeight: 600 }} onClick={() => setLayer(L.id, { on: !st.on })}>{L.name} <ProvChip tag={layerProv(L)} /></label>
                   <Switch checked={st.on} onChange={(v) => setLayer(L.id, { on: v })} label={L.name} />
                 </div>
                 {st.on && (
@@ -141,7 +143,7 @@ export default function LayersPanel() {
         <div className="card" style={{ padding: '6px 10px' }}>
           {vectorRows.map(([id, label]) => (
             <div key={id} className="row between" style={{ padding: '5px 0' }}>
-              <span style={{ fontSize: 12.5 }}>{label}</span>
+              <span style={{ fontSize: 12.5 }}>{label} <ProvChip tag={VECTOR_PROV[id]} /></span>
               <Switch checked={!!vectors[id]} onChange={() => toggleVector(id)} label={label} />
             </div>
           ))}

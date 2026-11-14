@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp, Clock, FlaskConical, GitCompareArrows, Mountain, Route, Square, Table2, Volume2, Wind } from 'lucide-react'
-import { useStore } from '../store.js'
+import { UI_CHATTER, useStore, useStoreExcept } from '../store.js'
 import { api, walkParams } from '../api.js'
 import XYChart, { Legend } from './charts/XYChart.jsx'
 import { fmtDist, fmtDur, fmtNum } from '../lib/format.js'
@@ -245,7 +245,7 @@ function ConsumablesTab() {
 
 function CompareTab() {
   const plan = useStore((s) => s.plan)
-  const st = useStore()
+  const st = useStoreExcept(UI_CHATTER)
   const [leg, setLeg] = useState(0)
   if (!plan) return <Empty text="Plan an EVA first, then compare path-finding algorithms on any leg." />
   const pts = [st.habitat, ...st.stops, ...(st.returnToHab ? [st.habitat] : [])]

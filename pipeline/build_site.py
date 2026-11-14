@@ -277,8 +277,9 @@ class Builder:
         from . import crism
         try:
             meta = crism.build(self.out, self.grid4, self.cfg["bbox"], DATA_DIR / "cache" / "crism",
-                               notes=self.cfg.get("crism_notes"))
+                               notes=self.cfg.get("crism_notes"), reference=self.out / "texture_4096.jpg")
             self.meta["crism"] = {k: {"coverage": v["coverage"], "products": len(v["products"])} for k, v in meta["layers"].items()}
+            self.meta["crism_registration"] = meta.get("registration", {})
         except Exception as e:  # offline or ODE down: the site still builds without the spectral layers
             log.warning("CRISM step skipped: %s", e)
 

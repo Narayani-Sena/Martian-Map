@@ -72,6 +72,11 @@ var _boot_frames := 0       # frames drawn during the boot screen (-1 once the c
 var _boot_worst_ms := 0.0
 var _boot_slow := 0
 var _remember := true       # keep the window and camera between runs (off for capture tours)
+var _guard_t := 0.0         # frame-rate guard: seconds and frames measured in this window
+var _guard_frames := 0
+var _guard_cool := 12.0     # seconds before it looks (boot, first shader compiles), and between steps
+var _guard_steps := 0
+var _guard_quiet := false   # a guard step is applying a setting: its own toast says why
 
 
 func _ready() -> void:
@@ -177,7 +182,8 @@ func _on_setting_changed(key: String) -> void:
 			world.sun.directional_shadow_max_distance = float(Quality.get_value("shadow_dist_walk" if world.mode == "walk" else "shadow_dist_orbit"))
 			world.dust.amount = int(Quality.get_value("dust"))
 			UiKit.set_glass_blur(_glass_on())
-			alerts.toast("Quality: %s. The terrain mesh and texture sizes follow on the next start." % Quality.level.capitalize(), "info")
+			if not _guard_quiet:
+				alerts.toast("Quality: %s. The terrain mesh and texture sizes follow on the next start." % Quality.level.capitalize(), "info")
 		"visor_fx":
 			visor.visible = Settings.visor_fx and world.mode == "walk"
 		"vol_ui", "vol_ambience", "vol_alerts":
@@ -219,7 +225,73 @@ func _apply_render_settings() -> void:
 	if not OS.get_cmdline_args().has("--disable-vsync"):
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(Settings.get_value("vsync")) else DisplayServer.VSYNC_DISABLED)
 	if fps_label:
-		fps_label.visible = bool(Settings.get_value("show_fps"))
+		fps_label.visible = _fps_wanted()
+
+
+## Frame-rate guard: a console that crawls is worse than a plainer one. After 6 s under 20 FPS in normal use it
+## steps the graphics down one notch: the frosted glass first, then the quality preset this GPU is detected for
+## (a saved High on an integrated GPU runs at about 8 FPS), then the 3D render scale. Each step is saved and said in a
+## toast; the settings take it back. Never during scripted tours or recordings, nor while the window is in the
+## background.
+const GUARD_FPS := 20.0
+const GUARD_WINDOW_S := 6.0
+
+
+func _frame_guard(delta: float) -> void:
+	if capture_dir != "" or _boot_frames >= 0 or _guard_steps >= 3:
+		return
+	var w := get_window()
+	if not w.has_focus() or w.mode == Window.MODE_MINIMIZED or delta > 0.5:   # away, or a loading hitch
+		_guard_t = 0.0
+		_guard_frames = 0
+		return
+	if _guard_cool > 0.0:
+		_guard_cool -= delta
+		return
+	_guard_t += delta
+	_guard_frames += 1
+	if _guard_t < GUARD_WINDOW_S:
+		return
+	var fps := _guard_frames / _guard_t
+	_guard_t = 0.0
+	_guard_frames = 0
+	if fps >= GUARD_FPS:
+		return
+	_guard_quiet = true
+	var step := _guard_step()
+	_guard_quiet = false
+	if step == "":
+		_guard_steps = 3   # nothing left to lower
+		return
+	_guard_steps += 1
+	_guard_cool = 5.0
+	print("frame guard: %.1f fps -> %s" % [fps, step])
+	alerts.toast("Running at %d FPS, so %s to keep the console smooth. Settings (F2) → Graphics changes it back." % [int(round(fps)), step], "info")
+
+
+## One notch down; what it did, or "" when there is nothing left to lower.
+func _guard_step() -> String:
+	if _glass_on():
+		Settings.set_value("glass", "off")
+		return "the frosted glass is off"
+	var order := ["low", "medium", "high"]
+	var gpu := Quality.detect_gpu()
+	var at := order.find(Quality.level)
+	if at > order.find(gpu) or (at > 0 and _guard_steps >= 1):
+		var to: String = gpu if at > order.find(gpu) else order[at - 1]
+		Settings.set_value("quality", to)
+		return "the quality is now %s (mesh and texture sizes follow on the next start)" % to.capitalize()
+	var rs := str(Settings.get_value("render_scale"))
+	var sc := clampf(rs.to_float(), 0.5, 1.0) if rs.is_valid_float() else float(Quality.get_value("scale"))
+	if sc > 0.61:
+		Settings.set_value("render_scale", "0.6")
+		return "the 3D render scale is 60 %"
+	return ""
+
+
+## The FPS readout, when it is switched on in the settings (never in a trailer recording).
+func _fps_wanted() -> bool:
+	return bool(Settings.get_value("show_fps")) and not tour.begins_with("trailer")
 
 
 ## The helmet HUD again from scratch (its colours and button sizes are set when it is built).
@@ -388,7 +460,7 @@ func _build_ui() -> void:
 	fps_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	fps_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	fps_label.add_theme_stylebox_override("normal", UiKit.box(Color(0, 0, 0, 0.55), Color(0, 0, 0, 0), 4, 0, 4))
-	fps_label.visible = bool(Settings.get_value("show_fps"))
+	fps_label.visible = _fps_wanted()
 	fps_layer.add_child(fps_label)
 
 	var boot_layer := CanvasLayer.new()
@@ -1360,10 +1432,11 @@ func _process(delta: float) -> void:
 			if delta > 0.1:
 				_boot_slow += 1
 	_update_cursor()
+	_frame_guard(delta)
 	_tel_acc += delta
 	if _tel_acc >= 0.12:   # EV1's state ~8 times a second, then the caution & warning checks
 		_tel_acc = 0.0
-		tel.demo = director.running
+		tel.demo = director.running or tour.begins_with("trailer")   # a recording is one demo: no mode-change notes
 		tel.update()
 		monitor.check(tel.d)
 	alerts.set_helmet(world.mode == "walk" and hud.visible)
@@ -1550,12 +1623,14 @@ func _shot(name: String) -> void:
 ## crater flooding, recorded with the movie writer. The camera rolls once the console has finished loading;
 ## trailer_marks.txt (in the capture folder) says where, so the launcher can cut the loading out.
 func _trailer() -> void:
+	alerts.muted = true
 	await _await_plan()
 	var waited := 0.0
 	while not tower.load_sheets_ready() and waited < 300.0:
 		await _wait(0.5)
 		waited += 0.5
 	await _wait(2.0)
+	_quiet_alerts()
 	_trailer_mark("start")
 	director.play()
 	await director.ended
@@ -1578,6 +1653,7 @@ func _trailer_lake() -> void:
 	var labels_were := world.show_labels
 	world.set_layer_visible("labels", false)
 	_fade_plan_ui(false)
+	_quiet_alerts()
 	world.orbit.fly_to(world.td.world_at(Mission.hab_xy()), 5600.0, world.orbit.yaw + 0.7, deg_to_rad(27.0), 2.6)
 	var lv: Dictionary = lake.levels()[0]
 	director.caption("Flood the crater", "The ancient lake at %s m (%s), a level recorded in the delta front's beds: the mudstones the samples come from settled out of this water." % [
@@ -1618,6 +1694,7 @@ func _trailer_radar() -> void:
 	var labels_were := world.show_labels
 	world.set_layer_visible("labels", false)
 	_fade_plan_ui(false)
+	_quiet_alerts()
 	world.orbit.fly_to(world.td.world_at(shot["xy"]), 420.0, float(shot["yaw"]), deg_to_rad(21.0), 2.6)
 	director.caption("Under the rover's track", "Perseverance's RIMFAX radar sounded the ground every 10 cm as it drove. Each sol's radargram hangs along that sol's drive, 5 m down (drawn 2.5 times deeper from orbit).")
 	await _wait(2.4)
@@ -1649,7 +1726,113 @@ func _trailer_then_now() -> void:
 		return
 	await _wait(ThenNow.SWEEP_S + 1.5)
 	then_now.stop()
+	_quiet_alerts()
 	await _wait(1.2)
+
+
+## --tour=trailer30 (run_godot.ps1 -Trailer -Short): the 30-second cut. The demo's short form, then the lake, the
+## radar and a rover photo, one line each, and a closing card. The launcher keeps only the stretches between an
+## "in" and an "out" mark (trailer_marks.txt), so loading and mode switches never show.
+func _trailer_short() -> void:
+	alerts.muted = true
+	await _await_plan()
+	var waited := 0.0
+	while not tower.load_sheets_ready() and waited < 300.0:
+		await _wait(0.5)
+		waited += 0.5
+	await radar_viewpoint()   # the radar runs are fetched before the camera rolls (nothing to do without radar)
+	await _wait(2.0)
+	_quiet_alerts()
+	_trailer_mark("start")
+	director.play_short()
+	await director.ended
+	var L := lake.levels()
+	if not L.is_empty() and bool(L[0].get("published", false)):
+		await _short_lake()
+	if radar.available():
+		await _short_radar()
+	await _short_then_now()
+	await _short_end()
+	_trailer_mark("end")
+	await _wait(0.5)
+
+
+func _short_lake() -> void:
+	if world.mode != "orbit":
+		_set_mode("orbit")
+		await _wait(1.2)
+	world.set_layer_visible("labels", false)
+	_fade_plan_ui(false)
+	_quiet_alerts()
+	world.orbit.auto_rotate = false
+	world.orbit.fly_to(world.td.world_at(Mission.hab_xy()), 5600.0, world.orbit.yaw + 0.7, deg_to_rad(27.0), 1.0)
+	await _wait(1.3)
+	_trailer_mark("in")
+	var lv: Dictionary = lake.levels()[0]
+	director.caption("Flood the crater", "The ancient lake, at the level its delta recorded (%s m)." % LakeWater.fmt_elev(float(lv["elev"])))
+	lake.cycle()
+	await _wait(LakeWater.RISE_S + 0.3)
+	_trailer_mark("out")
+	director.hide_caption()
+	lake.set_off(true)
+	await _wait(0.6)
+
+
+func _short_radar() -> void:
+	var shot: Dictionary = await radar_viewpoint()
+	if shot.is_empty():
+		return
+	if world.mode != "orbit":
+		_set_mode("orbit")
+		await _wait(1.2)
+	world.set_layer_visible("labels", false)
+	_fade_plan_ui(false)
+	world.orbit.auto_rotate = false
+	# low over the track and looking along it: the radargram's own texture near the camera, its glow further off
+	_quiet_alerts()
+	world.orbit.fly_to(world.td.world_at(shot["xy"]), 75.0, float(shot["along_yaw"]), deg_to_rad(10.0), 1.0)
+	await _wait(1.3)
+	await radar.set_on(true, true)   # builds the curtain first, out of the cut
+	_trailer_mark("in")
+	director.caption("Under the rover's track", "Perseverance's ground radar, hung 5 m into the ground.")
+	await _wait(RadarCurtain.REVEAL_S + 1.8)
+	_trailer_mark("out")
+	director.hide_caption()
+	radar.set_on(false, true)
+	await _wait(0.8)
+
+
+func _short_then_now() -> void:
+	director.hide_caption()
+	then_now.next()
+	var waited := 0.0
+	while not then_now.active and waited < 60.0:
+		await get_tree().process_frame
+		waited += get_process_delta_time()
+	if not then_now.active:
+		return
+	_trailer_mark("in")
+	await _wait(ThenNow.SWEEP_S * 0.55)
+	_trailer_mark("out")
+	then_now.stop()
+	await _wait(1.2)
+
+
+func _short_end() -> void:
+	if world.mode != "orbit":
+		_set_mode("orbit")
+		await _wait(1.2)
+	world.set_layer_visible("labels", true)
+	_fade_plan_ui(true)
+	_quiet_alerts()
+	world.home_view()
+	world.orbit.auto_rotate = true
+	await _wait(2.2)
+	_quiet_alerts()
+	_trailer_mark("in")
+	director.caption("Martian Map · NASA Space Apps 2026", "Plan the walk, see every way home, then walk it.")
+	await _wait(2.2)
+	_trailer_mark("out")
 
 
 ## A place to look at the radar curtain from: the middle of its longest run, seen side-on. {xy, yaw} or {}.
@@ -1674,9 +1857,15 @@ func radar_viewpoint() -> Dictionary:
 	var b := Mission.xy_of(float(lon[int(n * 0.65)]), float(lat[int(n * 0.65)]))
 	var mid := Mission.xy_of(float(lon[n / 2]), float(lat[n / 2]))
 	var along := (b - a).normalized()
-	# the camera looks across the track: its heading is the track's direction turned by 90 degrees
-	var yaw := atan2(along.x, along.y) + PI * 0.5
-	return {"xy": mid, "yaw": yaw}
+	# orbit yaw -atan2(x, y) looks along the site direction (x, y): across the track for "yaw", along it for "along_yaw"
+	var yaw := -atan2(along.y, -along.x)
+	return {"xy": mid, "yaw": yaw, "along_yaw": -atan2(along.x, along.y)}
+
+
+## Trailer shots start without latched cautions on screen (the shore and photo shots leave the route on purpose).
+func _quiet_alerts() -> void:
+	CW.silence()
+	CW.acknowledge_all()
 
 
 func _trailer_mark(name: String) -> void:
@@ -1766,6 +1955,10 @@ func _capture_tour() -> void:
 		return
 	if tour == "trailer":
 		await _trailer()
+		get_tree().quit()
+		return
+	if tour == "trailer30":
+		await _trailer_short()
 		get_tree().quit()
 		return
 	if tour == "fixes":

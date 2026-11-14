@@ -12,6 +12,7 @@ import PrintChecklist from './components/PrintChecklist.jsx'
 import TowerView from './components/TowerView.jsx'
 import RadarView from './components/RadarView.jsx'
 import PhotoBox from './components/PhotoBox.jsx'
+import GuidedTour, { TOUR_SEEN_KEY } from './components/GuidedTour.jsx'
 
 const Scene3D = lazy(() => import('./components/Scene3D.jsx'))
 
@@ -141,10 +142,25 @@ function WhiteBalanceFilter() {
   )
 }
 
+// The guided tour starts by itself on a first visit, or with ?tour in the address (a link for the judges).
+function useFirstTour() {
+  const ready = useStore((s) => !!s.site)
+  useEffect(() => {
+    if (!ready) return undefined
+    let seen = false
+    try { seen = localStorage.getItem(TOUR_SEEN_KEY) === '1' } catch { /* private mode */ }
+    const asked = new URLSearchParams(window.location.search).has('tour')
+    if (seen && !asked) return undefined
+    const t = setTimeout(() => useStore.getState().set({ tourStep: 0 }), 1200)
+    return () => clearTimeout(t)
+  }, [ready])
+}
+
 export default function App() {
   useSiteLoader()
   usePlanner()
   useConditions()
+  useFirstTour()
   const site = useStore((s) => s.site)
   const mode = useStore((s) => s.mode)
   const planLoading = useStore((s) => s.planLoading)
@@ -178,6 +194,7 @@ export default function App() {
         <PhotoBox />
       </div>
       <PrintChecklist />
+      <GuidedTour />
       <Toast />
     </>
   )

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Footprints, Layers3, Map as MapIcon, Radiation, ShieldCheck, ShieldAlert, SunMedium } from 'lucide-react'
+import { Box, Compass, Footprints, Layers3, Map as MapIcon, Radiation, ShieldCheck, ShieldAlert, SunMedium } from 'lucide-react'
 import { useStore } from '../store.js'
 import { hms, ltst, lmst, marsTime, missionSol, seasonName } from '../lib/mars24.js'
 
@@ -102,6 +102,9 @@ export default function TopBar() {
           <span>UTC</span>
           <b>{now.toISOString().slice(11, 19)}</b>
         </div>
+        <span className="pill button tour-pill" role="button" title="A one-minute guided tour of the planner" onClick={() => set({ tourStep: 0 })}>
+          <Compass size={13} /> <span className="hide-xs">TOUR</span>
+        </span>
         <span className={`pill button light-toggle ${light === 'earth' ? 'earth' : ''}`} role="button" aria-pressed={light === 'earth'}
           title={"Geologist's white balance: show the ground, the 3D view and the rover photos in Earth-like light, so rock colours read as they would at home. The rover teams publish both natural and white-balanced colour."}
           onClick={() => { const v = light === 'earth' ? 'mars' : 'earth'; try { localStorage.setItem('martian-map:light', v) } catch { /* private mode */ } set({ light: v }) }}>

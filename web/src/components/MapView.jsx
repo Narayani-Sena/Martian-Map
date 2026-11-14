@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import { Crosshair, Home, Maximize, MousePointer2, Plus, RadioTower, Ruler } from 'lucide-react'
-import { havensList, havensParam, useStore } from '../store.js'
+import { UI_CHATTER, havensList, havensParam, useStore, useStoreExcept } from '../store.js'
 import { api, obsString, walkParams } from '../api.js'
 import { FlowLayer, rampCss } from './map/flowLayer.js'
 import { CanvasOverlay, decodeMinutes, paintEnvelope } from './map/envelopeLayer.js'
@@ -82,10 +82,10 @@ export default function MapView() {
   const map = useRef(null)
   const groups = useRef({})
   const tileLayers = useRef({})
-  const [cursor, setCursor] = useState(null)
+  const [mapReady, setMapReady] = useState(null)   // the Leaflet map, once created (the cursor readout listens to it)
   const [ctx, setCtx] = useState(null)
   const [measure, setMeasure] = useState([])
-  const st = useStore()
+  const st = useStoreExcept(MAP_IGNORES)   // the route hover and panel states never re-render the map view
   const stRef = useLatest(st)
   const site = st.site
 
@@ -115,8 +115,7 @@ export default function MapView() {
     for (const k of ['contours', 'traverse', 'waypoints', 'rings', 'route', 'compare', 'markers', 'measure', 'hover', 'extras', 'heli', 'suggest', 'flow', 'pathHome', 'skyfix', 'grid', 'ideas', 'envelope', 'rescue', 'caches', 'live', 'smart', 'chem', 'radar', 'radarCursor', 'views'])
       groups.current[k] = L.layerGroup().addTo(m)
 
-    m.on('mousemove', (e) => setCursor({ lon: e.latlng.lng, lat: e.latlng.lat }))
-    m.on('mouseout', () => setCursor(null))
+    setMapReady(m)   // mouse moves are handled by <CursorReadout>, so they never re-render this whole view
     m.on('click', (e) => onClick(e.latlng.lng, e.latlng.lat))
     m.on('contextmenu', (e) => {
       const p = e.containerPoint
@@ -752,16 +751,6 @@ export default function MapView() {
     }
   }, [st.stops, st.habitat, st.relays, st.selectedStop, st.vectors.stops, st.vectors.shelters, st.vectors.refuges, st.vectors.relays, st.radio, site, st.rover, st.plan?.rover?.dropoff])
 
-  // ------------------------------------------------------------------ hover sync with charts
-  useEffect(() => {
-    const g = groups.current.hover
-    g.clearLayers()
-    const p = st.plan?.profile
-    if (!p || st.hoverD == null) return
-    const lon = interp(p.d, p.lon, st.hoverD)
-    const lat = interp(p.d, p.lat, st.hoverD)
-    L.marker([lat, lon], { icon: L.divIcon({ className: '', html: '<div class="hover-dot"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }), interactive: false, zIndexOffset: 2000 }).addTo(g)
-  }, [st.hoverD, st.plan])
 
   // ------------------------------------------------------------------ measure tool
   useEffect(() => {
@@ -784,16 +773,6 @@ export default function MapView() {
     if (st.focus && map.current) map.current.flyTo([st.focus.lat, st.focus.lon], Math.max(map.current.getZoom(), 17), { duration: 0.8 })
   }, [st.focus])
 
-  // ------------------------------------------------------------------ cursor readout (throttled terrain query)
-  const [readout, setReadout] = useState(null)
-  useEffect(() => {
-    if (!cursor) return
-    const ctrl = new AbortController()
-    const t = setTimeout(() => {
-      api.query(site.id, { lon: cursor.lon, lat: cursor.lat }, ctrl.signal).then((q) => setReadout(q)).catch(() => {})
-    }, 120)
-    return () => { clearTimeout(t); ctrl.abort() }
-  }, [cursor, site.id])
 
   const tools = [
     { id: 'select', icon: MousePointer2, label: 'Inspect' },
@@ -821,20 +800,8 @@ export default function MapView() {
       </div>
       {hints[st.tool] && <div className="tool-hint">{hints[st.tool]} · Esc to cancel</div>}
       <KeyHandler />
-      {cursor && (
-        <div className="statusbar">
-          <span>{fmtLonLat(cursor.lon, cursor.lat)}</span>
-          {readout?.inside && (
-            <>
-              <span>elev <b>{readout.elev?.toFixed(1)} m</b></span>
-              <span>slope <b>{readout.slope?.toFixed(1)}°</b></span>
-              <span>rough <b>{readout.rough?.toFixed(2)} m</b></span>
-              <span>shield <b>{((readout.shield || 0) * 100).toFixed(1)} %</b></span>
-            </>
-          )}
-          <span>dist to hab <b>{fmtDist(distanceM(cursor, st.habitat))}</b></span>
-        </div>
-      )}
+      <CursorReadout map={mapReady} siteId={site.id} />
+      <RouteHover group={mapReady ? groups.current.hover : null} profile={st.plan?.profile} />
       {ctx && (
         <div className="ctx-menu" style={{ left: ctx.x, top: ctx.y }} onMouseLeave={() => setCtx(null)}>
           <div className="ctx-head">{fmtLonLat(ctx.lon, ctx.lat)}</div>
@@ -846,6 +813,78 @@ export default function MapView() {
         </div>
       )}
     </>
+  )
+}
+
+// Store keys the map view never reads: changes to them alone do not re-render it.
+const MAP_IGNORES = [...UI_CHATTER, 'panel', 'drawer', 'summaryOpen', 'planLoading', 'compareLoading', 'suggestLoading',
+  'pointInfo', 'conditions', 'spaceWeather', 'liveWeather', 'orrery']
+
+// The point on the route under the cursor of a chart (profile, suit strip, notes): one marker, moved, never rebuilt.
+function RouteHover({ group, profile }) {
+  const hoverD = useStore((s) => s.hoverD)
+  const mk = useRef(null)
+  useEffect(() => {
+    if (!group) return undefined
+    return () => { if (mk.current) group.removeLayer(mk.current); mk.current = null }
+  }, [group])
+  useEffect(() => {
+    if (!group) return
+    if (!profile || hoverD == null) {
+      if (mk.current) { group.removeLayer(mk.current); mk.current = null }
+      return
+    }
+    const ll = [interp(profile.d, profile.lat, hoverD), interp(profile.d, profile.lon, hoverD)]
+    if (mk.current) mk.current.setLatLng(ll)
+    else {
+      mk.current = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="hover-dot"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }), interactive: false, zIndexOffset: 2000 })
+      mk.current.addTo(group)
+    }
+  }, [group, profile, hoverD])
+  return null
+}
+
+// The status bar under the cursor: position, terrain at that point (a throttled query) and the distance to the hab.
+// It keeps the mouse position to itself, so moving the mouse re-renders this line only, not the map view.
+function CursorReadout({ map, siteId }) {
+  const habitat = useStore((s) => s.habitat)
+  const [cursor, setCursor] = useState(null)
+  const [readout, setReadout] = useState(null)
+  useEffect(() => {
+    if (!map) return undefined
+    let raf = 0
+    let last = null
+    const move = (e) => {
+      last = { lon: e.latlng.lng, lat: e.latlng.lat }
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; setCursor(last) })   // at most once a frame
+    }
+    const out = () => { cancelAnimationFrame(raf); raf = 0; setCursor(null) }
+    map.on('mousemove', move)
+    map.on('mouseout', out)
+    return () => { map.off('mousemove', move); map.off('mouseout', out); cancelAnimationFrame(raf) }
+  }, [map])
+  useEffect(() => {
+    if (!cursor) return undefined
+    const ctrl = new AbortController()
+    const t = setTimeout(() => {
+      api.query(siteId, { lon: cursor.lon, lat: cursor.lat }, ctrl.signal).then((q) => setReadout(q)).catch(() => {})
+    }, 120)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [cursor, siteId])
+  if (!cursor) return null
+  return (
+    <div className="statusbar">
+      <span>{fmtLonLat(cursor.lon, cursor.lat)}</span>
+      {readout?.inside && (
+        <>
+          <span>elev <b>{readout.elev?.toFixed(1)} m</b></span>
+          <span>slope <b>{readout.slope?.toFixed(1)}°</b></span>
+          <span>rough <b>{readout.rough?.toFixed(2)} m</b></span>
+          <span>shield <b>{((readout.shield || 0) * 100).toFixed(1)} %</b></span>
+        </>
+      )}
+      {habitat && <span>dist to hab <b>{fmtDist(distanceM(cursor, habitat))}</b></span>}
+    </div>
   )
 }
 

@@ -3,6 +3,7 @@
   "name": "Jezero Crater · Three Forks Sample Depot",
   "short_name": "Jezero Depot",
   "region": "Jezero crater floor and the western delta front",
+  "scene": "Jezero crater's floor and the edge of its delta",
   "mission": "M20",
   "rover_name": "Perseverance",
   "story": "Two astronauts walk out from the habitat on the floor of Jezero crater to Three Forks, where Perseverance laid ten sealed sample tubes on the ground in 2022-23 as a backup cache for Mars Sample Return. They recover two tubes, climb the delta front to Wildcat Ridge, the lake mudstone behind Perseverance's most promising organic-bearing samples, look at the Amalik outcrop, and walk home before their consumables or daylight run low.",

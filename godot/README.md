@@ -190,6 +190,18 @@ shimmer from screenshots. Run them with `--disable-vsync`, or the 60 Hz display 
 (25–30 FPS) on a warm laptop, 15–33 % less than before the smoothness work. The laptop drifts by several ms
 as it heats up, so compare builds in A-B-B-A order.
 
+A frame-rate guard keeps the console usable when a saved preset is too heavy for the GPU: after 6 s under
+20 FPS it turns off the frosted glass, then drops to the preset detected for the GPU (a saved High runs at
+about 8 FPS on the UHD 620), then lowers the 3D render scale, one step at a time, each saved and announced in
+a toast. Scripted tours and recordings are never touched.
+
+Each frame redraws only what moves. The profile chart and the EVA timeline keep their playheads (and the timeline
+its hover tip) on layers of their own, so playback no longer redraws the charts; the dock's chips and gauges
+refresh ten times a second during playback; the map tags, the helmet compass and the timeline reuse one style box
+each instead of building one per frame; the range rings are built when first shown; the moonlight is off by day;
+and the visor blurs only the fogged pixels with a small ring of samples, instead of making the engine build a
+blurred copy of the whole screen every frame.
+
 `--headless --script res://tests/compile_check.gd` compiles every script in a few seconds.
 `--headless --script res://tests/models_check.gd` builds the habitat, a suit and PR-2 and prints their draw
 calls and vertices (it fails if the habitat needs over 40 or the suit's knee and elbow joints are missing);

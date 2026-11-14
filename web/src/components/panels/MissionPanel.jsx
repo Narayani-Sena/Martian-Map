@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Download, Home, MapPin, Plus, RadioTower, RotateCcw, Trash2, Upload, GitCompareArrows, Crosshair, Truck, Sparkles } from 'lucide-react'
-import { useStore } from '../../store.js'
+import { UI_CHATTER, useStore, useStoreExcept } from '../../store.js'
 import { api, walkParams } from '../../api.js'
 import { SOL_MS, hms, ltst, marsTime, utcForLtst } from '../../lib/mars24.js'
 import { fmtDist, fmtDur, fmtUtc } from '../../lib/format.js'
@@ -44,7 +44,7 @@ function StopEditor({ stop }) {
 
 // Science stops inside the safe walk-back range (data-use item D3).
 function SuggestStops() {
-  const s = useStore()
+  const s = useStoreExcept(UI_CHATTER)
   const [n, setN] = useState(3)
   const [limit, setLimit] = useState(35)
   const parked = s.plan?.rover?.enabled ? s.plan.rover.dropoff : null
@@ -93,7 +93,7 @@ function SuggestStops() {
 }
 
 export default function MissionPanel() {
-  const s = useStore()
+  const s = useStoreExcept(UI_CHATTER)
   const fileRef = useRef(null)
   const plan = s.plan
   const legs = plan?.legs || []

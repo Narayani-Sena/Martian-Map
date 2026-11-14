@@ -12,6 +12,7 @@ var _phase_name: Label
 var _play: Button
 var _speed: Button
 var _timeline: TimelineBar
+var _slow_ms := 0   # last time the slow readouts (chip, gauges, margin) were refreshed during playback
 var world: MarsWorld   # set by main: during an abort the phase chip reads the walk home, not the plan
 var _profile: LineChart
 var _gauges := {}
@@ -114,6 +115,9 @@ func _next_event() -> void:
 func _on_playing(on: bool) -> void:
 	_play.text = "⏸  PAUSE" if on else "▶  PLAY"
 	_speed.text = "×%d" % int(Mission.play_speed())
+	if not on:
+		_slow_ms = 0
+		_on_time(Mission.eva_t)   # the readouts at the moment playback stopped
 
 
 func _on_plan() -> void:
@@ -157,10 +161,14 @@ func _on_time(t: float) -> void:
 		return   # the helmet view hides the dock: no labels, gauges or charts to update
 	_clock.text = MarsTime.clock(t)
 	_timeline.set_time(t)
-	_profile.playhead = t
-	_profile.queue_redraw()
+	_profile.set_playhead(t)
 	if not Mission.has_plan():
 		return
+	# chips, gauges and colours change slowly: while the EVA plays, about 10 times a second is plenty
+	var now := Time.get_ticks_msec()
+	if Mission.playing and now - _slow_ms < 100:
+		return
+	_slow_ms = now
 	var st := Mission.state_at(t)
 	_ltst.text = "%s LTST  ·  sun %.0f°  ·  air %.0f °C" % [MarsTime.hms(float(st.get("ltst", 0)), false), float(st.get("sun_elev", 0)), float(st.get("air_c", 0))]
 	var ev: Dictionary = st.get("event", {})

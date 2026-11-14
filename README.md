@@ -33,7 +33,7 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 
 | The challenge asks for | Martian Map |
 |---|---|
-| A map, tool or interface a Mars astronaut could use on a surface mission | A web planner for the habitat (desktop or tablet), a native 3D console with a first-person helmet HUD, and an Apollo-style printable traverse sheet and cuff checklist |
+| A map, tool or interface a Mars astronaut could use on a surface mission | A web planner for the habitat (desktop, tablet or phone, with a one-minute guided tour), a native 3D console with a first-person helmet HUD, and an Apollo-style printable traverse sheet and cuff checklist |
 | A science goal and a place to explore | Two real sites: the boxwork ridges of Mount Sharp in Gale crater, which Curiosity studied in 2025, and Perseverance's Three Forks sample depot in Jezero crater |
 | Data from several NASA science missions, layered together | MRO (HiRISE, CTX, CRISM), Mars Odyssey (THEMIS), Curiosity, Perseverance, Ingenuity, NASA DONKI space weather, USGS geologic maps and ESA's HRSC terrain, in more than 20 map layers |
 | At least three kinds of data | All eight the brief names: topographic, optical, thermal (night and day), spectral (minerals), chemical (rover laser chemistry), geophysical (ground-penetrating radar), atmospheric and radiation, plus geologic maps and space weather |
@@ -74,6 +74,9 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
   conditions and shows the turn-back time. See [docs/NASA_STANDARDS.md](docs/NASA_STANDARDS.md).
 * **Uncertainty shown:** the return margin as a range under planning dispersions, how far the sand clues agree, and
   how far two independent terrain models agree, on the map and along the route.
+* **Where each layer comes from.** Every map layer carries a tag: MEASURED (an instrument reading), MAPPED (drawn or
+  published by scientists), DERIVED (geometry on measurements), MODELED (our model, with its limits stated) or RULE
+  (decided by the limits you set), so an instrument reading is never mistaken for a model.
 * **Space weather in the plan:** each DONKI forecast counts as a ±12 h window. A full hit during the EVA is NO-GO,
   and the planner offers the first start that clears every window and still ends before sunset.
 
@@ -102,7 +105,7 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 
 * **Plan it for me.** Give a time in suits and get three EVAs (safe, balanced, bold) that collect the most science
   inside the margins, with the stops in the best order, each planned for real. At the same 162 minutes in suits as
-  the hand-picked Gale EVA it finds 2.1 times the science, and all three come out GO.
+  the hand-picked Gale EVA it finds 1.3 times the science (1.4 times at Jezero), and all three come out GO.
 * **Scout first.** It finds the stretches where GO rests on uncertain data (the two terrain models disagree, or the
   sand clues do), plans a helicopter flight over them, as Ingenuity scouted for Perseverance's drivers, and shows the
   plan again with the uncertainty narrowed. The flight's result is simulated, and the app says so.
@@ -170,7 +173,9 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 
 ### Two clients
 
-* **Web planner** (React, Leaflet, three.js) for desktop and tablet, in the habitat.
+* **Web planner** (React, Leaflet, three.js) for desktop, tablet and phone, in the habitat. A one-minute guided tour
+  starts on the first visit (TOUR in the top bar, or `?tour` in the address); on a phone the panels open as sheets
+  over the map.
 * **3D console** (Godot 4.7): orbit view for planning, first-person helmet HUD for walking, the moving rover, a
   hold-to-confirm ABORT that walks the crew home, glove mode and a cuff menu for suited hands, gamepad and offline
   voice commands, a guided tour and a hands-free demo. It runs at 25-30 FPS on an Intel UHD 620 laptop.
@@ -205,6 +210,16 @@ are planning assumptions and are shown in the app.
 
 ## How we checked it
 
+* **Against the rovers' own drives.** A rover only drives where its team judged the ground safe, so its track is
+  ground known to be crossable. Curiosity drove 4.9 km inside the Gale site and Perseverance 9.1 km inside the
+  Jezero site; our walking map calls 97.8 % and 99.8 % of those tracks passable (99.8 % and 100 % within 2 m,
+  allowing for position error), and no-go ground is 8 and 18 times rarer under the wheels than across each site.
+  The web planner shows the check under Data & method, and it follows the walking limits you set.
+* **CRISM lined up with HiRISE.** As the archive places them, CRISM's map-projected mineral products sit 140-310 m
+  off the HiRISE terrain (136-222 m at Gale, 209-311 m at Jezero): their correlation with the HiRISE mosaic is about
+  0. Each observation's true-colour image is now phase-correlated with the HiRISE mosaic at 16 m, and the shift is
+  applied to its mineral layers (correlation 0.31-0.52 after), so the minerals and the science score built on them
+  sit on the right ground. A shift is used only when it clearly improves the match.
 * The sand model was tested against Jezero's mapped bedforms: AUC 0.84, and it flags 1 % of non-dune ground
   instead of 60 %.
 * The rover teams' terrain models line up with ours within half a metre after the shift found by phase correlation
@@ -246,6 +261,7 @@ python -m venv .venv; .venv\Scripts\pip install -r requirements.txt
 .\run_web.ps1 -Lan                                               # the same over HTTPS for phones on your Wi-Fi (port 8443, self-signed certificate)
 .\run_godot.ps1                                                  # 3D console (finds Godot 4.7 via $env:GODOT or PATH)
 .\run_godot.ps1 -Trailer -Site jezero_threeforks                 # record the hands-free demo to trailer\ (MP4 with ffmpeg)
+.\run_godot.ps1 -Trailer -Short -Site jezero_threeforks          # the 30-second cut for a Space Apps demo video
 .venv\Scripts\python -m pytest -q                                # tests
 ```
 

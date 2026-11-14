@@ -25,9 +25,35 @@ var interactive := true
 var _drag := false
 
 
+var _head: Control   # draws the playhead only (set_playhead moves it without redrawing the chart)
+
+
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	custom_minimum_size = Vector2(120, 80)
+	_head = Control.new()
+	_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_head.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_head.draw.connect(_draw_head)
+	add_child(_head)
+
+
+## Moves the playhead; the chart itself is not redrawn.
+func set_playhead(t: float) -> void:
+	if t == playhead or (is_nan(t) and is_nan(playhead)):
+		return
+	playhead = t
+	_head.queue_redraw()
+
+
+func _draw_head() -> void:
+	if is_nan(playhead) or playhead < x_min or playhead > x_max:
+		return
+	var r := plot_rect()
+	var px := to_px(playhead, y_min).x
+	_head.draw_rect(Rect2(px - 3, r.position.y, 6, r.size.y), Color(UiKit.ACCENT, 0.12))
+	_head.draw_line(Vector2(px, r.position.y), Vector2(px, r.end.y), UiKit.ACCENT, 1.5)
+	_head.draw_colored_polygon(PackedVector2Array([Vector2(px - 5, r.position.y - 1), Vector2(px + 5, r.position.y - 1), Vector2(px, r.position.y + 6)]), UiKit.ACCENT)
 
 
 func plot_rect() -> Rect2:
@@ -129,11 +155,7 @@ func _draw() -> void:
 		var mp := to_px(marker.x, marker.y)
 		draw_circle(mp, 7.0, Color(UiKit.AMBER, 0.25))
 		draw_circle(mp, 3.5, UiKit.AMBER)
-	if not is_nan(playhead) and playhead >= x_min and playhead <= x_max:
-		var px := to_px(playhead, y_min).x
-		draw_rect(Rect2(px - 3, r.position.y, 6, r.size.y), Color(UiKit.ACCENT, 0.12))
-		draw_line(Vector2(px, r.position.y), Vector2(px, r.end.y), UiKit.ACCENT, 1.5)
-		draw_colored_polygon(PackedVector2Array([Vector2(px - 5, r.position.y - 1), Vector2(px + 5, r.position.y - 1), Vector2(px, r.position.y + 6)]), UiKit.ACCENT)
+	_head.queue_redraw()   # the playhead layer follows the chart (callers may set playhead directly)
 	if title != "":
 		draw_string(UiKit.caps_font(), Vector2(r.position.x + 4, r.position.y + 11), title, HORIZONTAL_ALIGNMENT_LEFT, -1, UiKit.MIN_FONT, UiKit.DIM)
 	draw_string(f, Vector2(r.position.x, size.y - 2), x_fmt.call(x_min), HORIZONTAL_ALIGNMENT_LEFT, -1, UiKit.MIN_FONT, UiKit.FAINT)
