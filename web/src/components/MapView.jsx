@@ -112,7 +112,7 @@ export default function MapView() {
     m.createPane('vectors').style.zIndex = 420
     m.createPane('flow').style.zIndex = 432
     m.createPane('route').style.zIndex = 440
-    for (const k of ['contours', 'traverse', 'waypoints', 'rings', 'route', 'compare', 'markers', 'measure', 'hover', 'extras', 'heli', 'suggest', 'flow', 'pathHome', 'skyfix', 'grid', 'ideas', 'envelope', 'rescue', 'caches', 'live', 'smart', 'chem', 'radar', 'radarCursor'])
+    for (const k of ['contours', 'traverse', 'waypoints', 'rings', 'route', 'compare', 'markers', 'measure', 'hover', 'extras', 'heli', 'suggest', 'flow', 'pathHome', 'skyfix', 'grid', 'ideas', 'envelope', 'rescue', 'caches', 'live', 'smart', 'chem', 'radar', 'radarCursor', 'views'])
       groups.current[k] = L.layerGroup().addTo(m)
 
     m.on('mousemove', (e) => setCursor({ lon: e.latlng.lng, lat: e.latlng.lat }))
@@ -498,6 +498,36 @@ export default function MapView() {
     }).catch(() => {})
     return () => { alive = false }
   }, [st.vectors.radar, site])
+
+  // ------------------------------------------------------------------ the rover's photos where they were taken (feature E3)
+  useEffect(() => {
+    const g = groups.current.views
+    g.clearLayers()
+    if (!st.vectors.photoviews) return undefined
+    let alive = true
+    api.thenNow(site.id).then((d) => {
+      if (!alive) return
+      const R = 150 // m: length of a view cone on the map
+      for (const p of d.photos) {
+        const mLat = 1 / 59274.0
+        const mLon = 1 / (59274.0 * Math.cos((p.lat * Math.PI) / 180))
+        const pts = [[p.lat, p.lon]]
+        for (let k = 0; k <= 14; k++) {
+          const a = ((p.az - p.hfov / 2 + (k / 14) * p.hfov) * Math.PI) / 180
+          pts.push([p.lat + Math.cos(a) * R * mLat, p.lon + Math.sin(a) * R * mLon])
+        }
+        const tip = `<b>${d.rover}'s ${p.camera}</b> · sol ${Math.round(p.sol)}<br>looking ${Math.round(p.az)}° ${compass(p.az)}, ${Math.round(p.hfov)}° wide, camera ${p.cam_h_m} m up`
+          + `<br><img src="${p.thumb}" referrerpolicy="no-referrer" style="width:220px;border-radius:4px;margin-top:4px">`
+          + `<br><span style="opacity:.7">Click to open. In the 3D console, Shift+P stands you here.</span>`
+        const open = (e) => { L.DomEvent.stop(e); useStore.getState().set({ photoBox: { ...p, rover: d.rover } }) }
+        L.polygon(pts, { pane: 'vectors', color: '#ffd27a', weight: 1.2, opacity: 0.9, fillColor: '#ffd27a', fillOpacity: 0.16, bubblingMouseEvents: false })
+          .bindTooltip(tip, { className: 'mm-tip', direction: 'top', sticky: true }).on('click', open).addTo(g)
+        L.circleMarker([p.lat, p.lon], { pane: 'vectors', radius: 4, color: '#1a1208', weight: 1.2, fillColor: '#ffd27a', fillOpacity: 1, bubblingMouseEvents: false })
+          .on('click', open).addTo(g)
+      }
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [st.vectors.photoviews, site])
 
   // the column under the radargram viewer's cursor, on the map
   useEffect(() => {

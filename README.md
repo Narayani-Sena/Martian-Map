@@ -83,7 +83,9 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
   It shows the gateways where many ways home merge (six on Gale, 24-67 minutes out) and the ground with no way home.
   Click anywhere to trace your way back.
 * **Shrinking world, a suit-leak drill.** The ground still in reach as oxygen runs down. With a leak at Ridge Alpha,
-  120 minutes of oxygen leaves 194 ha in reach, and below about 52 minutes the habitat itself is out of reach.
+  120 minutes of oxygen leaves 194 ha in reach, and below about 52 minutes the habitat itself is out of reach. In the
+  3D console's leak drill the crew is on 30 minutes of secondary oxygen: the ground they can no longer get home from
+  dims red behind a glowing edge that tightens as the minutes run, and the visor says which havens are in reach.
 * **Partner down.** The worst point of the route for an injured partner, and the time to get them to pressure: 21
   minutes at worst on the default Gale route, with PR-2.
 * **Emergency caches.** Three oxygen caches at the gateways raise the share of the site within 30 minutes of a safe
@@ -152,7 +154,8 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 * **Then and now.** Press Shift+P in the 3D console to stand exactly where the rover's navigation camera stood,
   looking where it looked (from the camera model and rover attitude in NASA's raw-image feeds), and wipe between the
   rover's photo and our terrain model rendered from the same spot. It shows what the crew will see there, and how
-  well the map matches the real ground.
+  well the map matches the real ground. In the web planner the same photos are view cones on the map: hover for the
+  photo, click to open it.
 * **Arrival postcards.** For each stop, the view a few steps before arriving, rendered from the HiRISE terrain and
   colour for the arrival time and sun (with Mount Sharp on the horizon at Gale), beside the rover's own navigation-
   camera photo from the nearest place it stood.
@@ -268,8 +271,7 @@ docs/           NASA standards notes
 
 ## Status
 
-Everything described above works and has been checked, in the web planner and in the 3D console. Still to come:
-the shrinking-world edge drawn in the helmet during the leak drill.
+Everything described above works and has been checked, in the web planner and in the 3D console.
 
 ## Disclaimer
 

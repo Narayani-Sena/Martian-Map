@@ -71,3 +71,42 @@ def test_real_perseverance_frame_agrees_with_its_heading():
     want = (p["heading"] + float(ext["mastAz"])) % 360.0
     assert abs((az - want + 180.0) % 360.0 - 180.0) < 1.5
     assert 1.8 < -p["pos_ned"][2] < 2.2   # the navigation cameras sit about 2 m up
+
+
+@pytest.mark.skipif(not (CACHE / "mars2020_nav_586_588.json").exists(), reason="no cached Perseverance frames")
+def test_photos_endpoint_offline(monkeypatch):
+    """/then-now with the feed replaced by cached frames: each frame finds its waypoint, gets a pose inside the
+    site, and two views of one sol never point the same way."""
+    from fastapi.testclient import TestClient
+
+    from server import main, rover_images
+    from server.site_store import get_site, is_built
+    if not is_built("jezero_threeforks"):
+        pytest.skip("Jezero not built")
+    js = json.loads((CACHE / "mars2020_nav_586_588.json").read_text())
+    frames = []
+    for it in js["images"]:
+        ext, cam = it.get("extended") or {}, it.get("camera") or {}
+        dim = [float(x) for x in str(ext.get("dimension", "(0,0)")).strip("()").split(",")]
+        frames.append({"id": it["imageid"], "sol": it["sol"], "camera": "Navcam", "url": "u", "thumb": "t",
+                       "w": dim[0], "h": dim[1], "site": it.get("site"), "drive": it.get("drive"),
+                       "attitude": it.get("attitude"), "cahv": cam.get("camera_model_component_list")})
+    monkeypatch.setattr(rover_images, "landscapes",
+                        lambda mission, s0, s1, per_page=60: [f for f in frames if s0 <= f["sol"] <= s1])
+    monkeypatch.setattr(tn, "pick_sols", lambda sols, k=tn.SOLS_TO_TRY: [586, 587])
+    main._thennow_memo.clear()
+    d = TestClient(main.app).get("/api/sites/jezero_threeforks/then-now").json()
+    main._thennow_memo.clear()
+    assert d["photos"], d
+    site = get_site("jezero_threeforks")
+    lon0, lat0, lon1, lat1 = site.grid.bounds_lonlat()
+    for p in d["photos"]:
+        assert p["rmc"] == "29_0" and lon0 <= p["lon"] <= lon1 and lat0 <= p["lat"] <= lat1
+        assert 1.8 < p["cam_h_m"] < 2.2 and 10 < p["hfov"] < 100 and abs(sum(v * v for v in p["dir"]) - 1) < 1e-3
+    by_sol = {}
+    for p in d["photos"]:
+        by_sol.setdefault(p["sol"], []).append(p["az"])
+    for azs in by_sol.values():
+        assert len(azs) <= tn.PER_SOL
+        if len(azs) == 2:
+            assert abs((azs[0] - azs[1] + 180) % 360 - 180) >= 25

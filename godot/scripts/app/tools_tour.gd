@@ -383,6 +383,57 @@ func run_radar() -> void:
 	print("radar tour: %d passed, %d failed" % [_pass, _fail])
 
 
+## A3 (--tour=reach): in the suit-leak drill the ground out of reach on the secondary oxygen turns red.
+func run_reach() -> void:
+	var boot := 0.0
+	while not Mission.has_plan() and boot < 240.0:
+		await m._wait(0.5)
+		boot += 0.5
+	await m._await_plan()
+	await m._wait(1.0)
+	Mission.set_playing(false)
+	var w: MarsWorld = m.world
+	var re: ReachEdge = m.reach
+	m._set_mode("walk")
+	await m._wait(1.5)
+	w.walker.autopilot = false
+	_place_on_route(420.0)
+	await m._wait(0.5)
+	m._suit_drill("leak")
+	Mission.set_playing(false)
+	var waited := 0.0
+	while (re._tex == null or re.havens.is_empty()) and waited < 60.0:
+		await m._wait(0.25)
+		waited += 0.25
+	re.minutes_left = 14.0
+	w.walker.pitch = -0.28
+	await m._wait(1.5)
+	await m._shot("t22_reach_helmet.png")
+	var hab_need := NAN
+	for h in re.havens:
+		if str(h.get("name", "")).to_lower().begins_with("hab") and h.get("needs_min") != null:
+			hab_need = float(h["needs_min"])
+	_check("T27", re.on and re._tex != null and float(w._param("reach_min")) >= 0.0 and re._banner.visible and is_finite(hab_need),
+		"leak drill: %.0f min left, field %dx%d, hab needs %.1f min from here; banner: %s" % [re.minutes_left,
+		re._tex.get_width(), re._tex.get_height(), hab_need, re._b_text.text])
+	m._set_mode("orbit")
+	await m._wait(1.2)
+	w.orbit.fly_to(w.td.world_at(w.walker.xy()), 2600.0, w.orbit.yaw, deg_to_rad(52.0), 0.1)
+	re.minutes_left = 20.0
+	await m._wait(2.0)
+	await m._shot("t23_reach_orbit.png")
+	var m0 := re.minutes_left
+	# play for a moment: the minutes must drop with the EVA clock
+	Mission.set_playing(true)
+	await m._wait(2.0)
+	Mission.set_playing(false)
+	_check("T28", re.minutes_left < m0, "the minutes run with the EVA clock: %.1f -> %.1f" % [m0, re.minutes_left])
+	m._suit_drill("")
+	await m._wait(0.6)
+	_check("T29", not re.on and float(w._param("reach_min")) < 0.0 and not re._banner.visible, "drill over: the edge is gone")
+	print("reach tour: %d passed, %d failed" % [_pass, _fail])
+
+
 ## E3 (--tour=thennow): the rover's own photos, each from the pose it was taken at, wiped against the render.
 func run_thennow() -> void:
 	var boot := 0.0

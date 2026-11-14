@@ -26,6 +26,7 @@ var tower: LayerTower          # TOWER: the data layers lift off the terrain as 
 var live: LiveLink             # the helmet's live link to the habitat console (web planner)
 var radar: RadarCurtain        # Shift+J: Perseverance's ground radar hung under its track (Jezero)
 var then_now: ThenNow          # Shift+P: the rover's photo where it was taken, wiped against the render
+var reach: ReachEdge           # suit-leak drill: where the crew can still get home from on the secondary O2
 var callouts: Callouts
 var alerts: Alerts
 var lightbox: Lightbox
@@ -329,6 +330,10 @@ func _build_ui() -> void:
 	radar.name = "RadarCurtain"
 	world.add_child(radar)
 	radar.setup(world, func(t: String, k: String): alerts.toast(t, k))
+	reach = ReachEdge.new()
+	reach.name = "ReachEdge"
+	add_child(reach)
+	reach.setup(world, self)
 	then_now = ThenNow.new()
 	then_now.name = "ThenNow"
 	add_child(then_now)
@@ -1749,6 +1754,10 @@ func _capture_tour() -> void:
 		return
 	if tour == "radar":
 		await ToolsTour.new(self).run_radar()
+		get_tree().quit()
+		return
+	if tour == "reach":
+		await ToolsTour.new(self).run_reach()
 		get_tree().quit()
 		return
 	if tour == "thennow":

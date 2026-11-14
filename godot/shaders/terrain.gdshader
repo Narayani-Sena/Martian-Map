@@ -71,6 +71,13 @@ const float FLOW_EVERY = 1.4;
 uniform float lake_y = -1.0e9;
 uniform sampler2D lake_tex : filter_linear, repeat_disable;
 
+// the shrinking world (feature A3): in the suit-leak drill, ground the crew can no longer walk to and get home from
+// on the secondary oxygen pack dims and turns red behind a glowing edge that tightens as the minutes run down
+uniform float reach_min = -1.0;      // minutes of oxygen left (< 0: off)
+uniform sampler2D reach_tex : filter_nearest, repeat_disable;   // minutes x 10: R high byte, G low byte; A = 0 impossible
+uniform vec4 reach_rect = vec4(0.0, 0.0, 1.0, 1.0);             // x_min, y_max, width, height (m) of the 4 m grid
+uniform ivec2 reach_dims = ivec2(1, 1);
+
 uniform float contour_strength = 0.0;
 uniform float contour_interval = 5.0;
 uniform float contour_glow = 0.0;   // synthetic vision (feature B6): the lines glow, readable in dust or dusk
@@ -200,6 +207,12 @@ void vertex() {
 	vec3 n = normalize(vec3(-(hx - h), e, hy - h));
 	NORMAL = normalize(vec3(n.x * k, n.y, n.z * k));
 	v_world = vec3(w.x, h, w.z);
+}
+
+float reach_need(ivec2 p) {
+	ivec2 q = clamp(p, ivec2(0), reach_dims - ivec2(1));
+	vec4 t = texelFetch(reach_tex, q, 0);
+	return t.a < 0.5 ? 999.0 : min((t.r * 255.0 * 256.0 + t.g * 255.0) / 10.0, 999.0);
 }
 
 void fragment() {
@@ -356,6 +369,31 @@ void fragment() {
 		float fill = (1.0 - smoothstep(0.0, r, d)) * (0.06 + 0.1 * m.w);
 		float sel = m.w * (1.0 - smoothstep(0.0, wid, abs(d - r * 1.35))) * (0.6 + 0.4 * sin(TIME * 5.0));
 		emit += c.rgb * c.a * (ring + wave * 0.9 + fill + sel);
+	}
+
+	// the shrinking world: out of reach on what is left of the oxygen
+	if (reach_min >= 0.0) {
+		vec2 ruv = vec2((xy.x - reach_rect.x) / reach_rect.z, (reach_rect.y - xy.y) / reach_rect.w);
+		if (ruv.x > 0.0 && ruv.x < 1.0 && ruv.y > 0.0 && ruv.y < 1.0) {
+			vec2 pc = ruv * vec2(reach_dims) - 0.5;
+			ivec2 p0 = ivec2(floor(pc));
+			vec2 f = pc - floor(pc);
+			float n00 = reach_need(p0);
+			float n10 = reach_need(p0 + ivec2(1, 0));
+			float n01 = reach_need(p0 + ivec2(0, 1));
+			float n11 = reach_need(p0 + ivec2(1, 1));
+			float need = mix(mix(n00, n10, f.x), mix(n01, n11, f.x), f.y);
+			// next to a no-go cell the field jumps to 999: no edge there (no-go ground is simply dimmed)
+			float valid = step(max(max(n00, n10), max(n01, n11)), 998.0);
+			float over = need - reach_min;
+			float fw = clamp(fwidth(need), 0.02, 1.5);
+			float out_f = smoothstep(-fw, fw, over);
+			alb = mix(alb, alb * vec3(0.5, 0.26, 0.24), out_f * 0.82);
+			float edge = (1.0 - smoothstep(0.0, fw * 2.0 + 0.12, abs(over))) * valid;
+			float pulse = 0.75 + 0.25 * sin(TIME * 4.0);
+			emit += vec3(1.0, 0.24, 0.16) * edge * 1.8 * pulse;
+			emit += vec3(1.0, 0.1, 0.05) * out_f * 0.03;
+		}
 	}
 
 	ALBEDO = alb;

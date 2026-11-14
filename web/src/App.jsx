@@ -11,6 +11,7 @@ import BottomDrawer from './components/BottomDrawer.jsx'
 import PrintChecklist from './components/PrintChecklist.jsx'
 import TowerView from './components/TowerView.jsx'
 import RadarView from './components/RadarView.jsx'
+import PhotoBox from './components/PhotoBox.jsx'
 
 const Scene3D = lazy(() => import('./components/Scene3D.jsx'))
 
@@ -174,6 +175,7 @@ export default function App() {
           </div>
           {!walk && mode !== 'tower' && <RightPanel />}
         </div>
+        <PhotoBox />
       </div>
       <PrintChecklist />
       <Toast />
