@@ -1,0 +1,13 @@
+# Martian Map: data pipeline + FastAPI backend (Python 3.11; tested with the versions in brackets)
+fastapi>=0.115        # [0.162]
+uvicorn>=0.30         # [0.54]
+pydantic>=2.7         # [2.14]
+numpy>=2.0            # [2.4]
+scipy>=1.13           # [1.17]
+scikit-image>=0.24    # [0.26]  MCP Dijkstra, contours
+rasterio>=1.4         # [1.4]   HiRISE / HRSC / THEMIS COGs over HTTP range reads
+shapely>=2.0          # [2.2]   contour lines (pipeline/contours.py)
+pillow>=10            # [13.0]
+requests>=2.31        # [2.34]
+httpx>=0.27           # [0.28]  FastAPI TestClient
+pytest>=8             # [9.2]

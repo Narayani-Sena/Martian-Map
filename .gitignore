@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Web planner
+web/node_modules/
+web/dist/
+
+# Godot import cache (rebuilt by the editor)
+godot/.godot/
+
+# Built and downloaded site data: rebuild with  python -m pipeline.build_site <site_id>
+data/
+
+# Local files
+*.log
+.env
+.env.*
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

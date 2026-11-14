@@ -1,0 +1,211 @@
+{
+  "id": "jezero_threeforks",
+  "name": "Jezero Crater · Three Forks Sample Depot",
+  "short_name": "Jezero Depot",
+  "region": "Jezero crater floor and the western delta front",
+  "mission": "M20",
+  "rover_name": "Perseverance",
+  "story": "Two astronauts walk out from the habitat on the floor of Jezero crater to Three Forks, where Perseverance laid ten sealed sample tubes on the ground in 2022-23 as a backup cache for Mars Sample Return. They recover two tubes, climb the delta front to Wildcat Ridge, the lake mudstone behind Perseverance's most promising organic-bearing samples, look at the Amalik outcrop, and walk home before their consumables or daylight run low.",
+  "frame_note": "Coordinates are on the USGS DTM. The stops come from Mars 2020 team maps (sample sites, the depot), so they were moved by the measured team-frame shift (-22.6 m east, +20.7 m north): data-use item D6.",
+  "bbox": [
+    77.38,
+    18.4275,
+    77.4375,
+    18.4825
+  ],
+  "dem": {
+    "collection": "mro_hirise_socet_dtms",
+    "preferred": [
+      "DTEEC_002387_1985_003798_1985_A01",
+      "DTEEC_045994_1985_046060_1985_U01"
+    ]
+  },
+  "team_dem": {
+    "name": "Mars 2020 TRN HiRISE DTM mosaic (1 m)",
+    "team": "Perseverance (Mars 2020) team",
+    "citation": "Fergason, R.L., et al., 2020, Mars 2020 Terrain Relative Navigation HiRISE DTM mosaic, USGS Astrogeology",
+    "url": "https://planetarymaps.usgs.gov/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.tif",
+    "trek_layer": "JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40"
+  },
+  "regional_half_deg": 0.8,
+  "basemap": {
+    "id": "hirise",
+    "name": "HiRISE + CTX colour mosaic (25 cm)",
+    "url": "https://mars.nasa.gov/mmgis-maps/M20/Layers/M20_HiRISE_RGB_CTX_mosaic_25cm_v7_Merge_LERC_clip/{z}/{x}/{y}.png",
+    "tms": true,
+    "min_zoom": 10,
+    "max_native_zoom": 19,
+    "attribution": "HiRISE/CTX colour mosaic © NASA/JPL-Caltech/UArizona/MSSS, served by JPL MMGIS"
+  },
+  "context_basemap": {
+    "id": "nesyrtis",
+    "name": "Northeast Syrtis base map",
+    "url": "https://mars.nasa.gov/mmgis-maps/M20/Layers/HMC_13E10_co5_colorcorrect_rect/{z}/{x}/{y}.png",
+    "tms": true,
+    "min_zoom": 4,
+    "max_native_zoom": 12,
+    "attribution": "HRSC colour mosaic © ESA/DLR/FU Berlin, served by JPL MMGIS"
+  },
+  "labels": {
+    "id": "labels",
+    "name": "Place names",
+    "url": "https://mars.nasa.gov/mmgis-maps/M20/Layers/M20_Placenames_175k_800dpi/{z}/{x}/{y}.png",
+    "tms": true,
+    "min_zoom": 4,
+    "max_native_zoom": 18
+  },
+  "texture_zoom": 17,
+  "regional_texture_zoom": 12,
+  "thermal": {
+    "collection": "mo_themis_controlled_mosaics",
+    "item": "mc13_syrtis_major_nir"
+  },
+  "trek": {
+    "thermal_day": {
+      "layer": "THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018",
+      "level": 9,
+      "ext": "png"
+    }
+  },
+  "geology": {
+    "service": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Jezero_FeatureServiceFromPro/FeatureServer/8",
+    "map": "Geologic Map of Jezero Crater and the Nili Planum Region (USGS SIM 3464)",
+    "citation": "Sun, V.Z., and Stack, K.M., 2020, Geologic map of Jezero crater and the Nili Planum region, Mars: U.S. Geological Survey Scientific Investigations Map 3464, scale 1:75,000",
+    "scale": "1:75,000",
+    "url": "https://doi.org/10.3133/sim3464",
+    "note": ""
+  },
+  "rover": {
+    "waypoints": "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json",
+    "traverse": "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json",
+    "elev_key": "elev_geoid",
+    "raw_images_mission": "mars2020",
+    "landing_msd_local": 52304,
+    "extras": [
+      {
+        "id": "samples",
+        "name": "Perseverance sample sites",
+        "kind": "points",
+        "url": "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_SAMPLE_v3.json",
+        "props": [
+          "sample_num",
+          "sample_name",
+          "outcrop_name",
+          "sample_location",
+          "sample_type",
+          "sol",
+          "date"
+        ],
+        "margin_m": 3000
+      }
+    ]
+  },
+  "ingenuity": true,
+  "crism_notes": {
+    "HYD": "Red = polyhydrated sulfates, green = monohydrated sulfates, blue = bound water. Hydrated minerals mark where water once soaked the delta and the lake-floor rocks; Perseverance found sulfate-bearing sandstone at the base of the delta front.",
+    "PHY": "Red = Fe/Mg clays, green = Al clays, blue = bound water. CRISM's Fe/Mg-clay and carbonate signatures in the delta are why Jezero was chosen: clays settle out in still lake water and can preserve organic matter.",
+    "MAF": "Red = olivine, green = low-calcium pyroxene, blue = high-calcium pyroxene. The crater floor (Séítah and Máaz) is olivine- and pyroxene-rich igneous rock, and dark basaltic sand drifts between the outcrops.",
+    "FEM": "Iron-bearing minerals: red = crystalline ferric oxides, green and blue = other ferric and ferrous absorptions. Olivine-rich floor rocks show strong ferrous bands; altered delta layers lean ferric."
+  },
+  "habitat": {
+    "name": "Hab-2 “Three Forks Station”",
+    "lon": 77.4175,
+    "lat": 18.447
+  },
+  "stops": [
+    {
+      "id": "J1",
+      "name": "Three Forks Depot",
+      "kind": "depot",
+      "lon": 77.4086149,
+      "lat": 18.4526066,
+      "dwell_min": 35,
+      "tasks": [
+        "Match each tube on the ground to the depot map",
+        "Photograph two tubes in place, then pick them up",
+        "Stow both tubes in the sealed sample caddy",
+        "Leave a radio beacon marking the remaining tubes"
+      ],
+      "science": "Perseverance laid ten sealed tubes on the crater floor here between December 2022 and January 2023, a backup cache for Mars Sample Return holding cores of delta and crater-floor rock, regolith and atmosphere."
+    },
+    {
+      "id": "J2",
+      "name": "Wildcat Ridge",
+      "kind": "ridge",
+      "lon": 77.4062919,
+      "lat": 18.4582916,
+      "dwell_min": 30,
+      "tasks": [
+        "Hammer sample of the finely layered mudstone",
+        "Close-up imaging of the bedding planes",
+        "Find Perseverance's abrasion patch for comparison"
+      ],
+      "science": "Fine-grained mudstone laid down in the lake about 3.5 billion years ago. Perseverance's SHERLOC instrument found organic-molecule signals here, and the rover cored it twice (Hazeltop and Bearwallow, July-August 2022)."
+    },
+    {
+      "id": "J3",
+      "name": "Amalik Outcrop",
+      "kind": "outcrop",
+      "lon": 77.4018419,
+      "lat": 18.4503816,
+      "dwell_min": 20,
+      "tasks": [
+        "Sample the sulfate-bearing sandstone",
+        "Panorama of the delta front",
+        "Collect a contingency sample"
+      ],
+      "science": "Sulfate-bearing sandstones and mudstones near the base of the delta front, cored by Perseverance as Shuyak and Mageik in October 2022."
+    }
+  ],
+  "shelters": [
+    {
+      "id": "PR-2",
+      "name": "Pressurized rover PR-2",
+      "kind": "rover",
+      "lon": 77.4128,
+      "lat": 18.4502,
+      "note": "Parked between the hab and the depot. Pressurized cabin with a water-wall storm shelter."
+    }
+  ],
+  "radio": {
+    "habitat_mast_m": 12.0,
+    "suit_antenna_m": 2.0,
+    "relays": []
+  },
+  "skyline_features": [
+    {
+      "name": "Jezero crater rim (west)",
+      "lon": 77.23,
+      "lat": 18.57,
+      "note": "approximate, nearest rim"
+    },
+    {
+      "name": "Jezero crater rim (east)",
+      "lon": 77.93,
+      "lat": 18.19,
+      "note": "approximate, far rim"
+    }
+  ],
+  "lake": {
+    "source": "Mangold et al., Past variations of water level of Jezero paleolake, LPSC 2024 (NTRS 20240000546)",
+    "note": "Delta-front beds record Jezero's lake falling from about -2,410 m (fan top, north of Belva crater) to -2,500 m (Kodiak, Eastern Cape) as it dried in a closed basin below the eastern breach (about -2,400 m). The whole Three Forks site lies below the breach: the mudstones the samples come from were laid down under this water.",
+    "levels": [
+      {
+        "name": "Eastern breach (the lake at its outlet)",
+        "elev": -2400
+      },
+      {
+        "name": "Highest delta-front level (north of Belva)",
+        "elev": -2410
+      },
+      {
+        "name": "Fan top beds",
+        "elev": -2448
+      },
+      {
+        "name": "Kodiak and Eastern Cape level",
+        "elev": -2500
+      }
+    ]
+  }
+}

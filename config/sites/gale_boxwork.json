@@ -1,0 +1,157 @@
+{
+  "id": "gale_boxwork",
+  "name": "Gale Crater · Mount Sharp Boxwork",
+  "short_name": "Gale Boxwork",
+  "region": "Aeolis Mons (Mount Sharp), Gale crater",
+  "mission": "MSL",
+  "rover_name": "Curiosity",
+  "story": "Two astronauts walk from the habitat up to the boxwork: a web of 1-2 m tall mineral-cemented ridges with sandy hollows between them that Curiosity began exploring in 2025. They sample a ridge and a hollow, visit the rover's track, and walk back before their consumables or daylight run low.",
+  "bbox": [
+    137.3575,
+    -4.8425,
+    137.4125,
+    -4.7875
+  ],
+  "dem": {
+    "collection": "mro_hirise_socet_dtms",
+    "preferred": [
+      "DTEEC_019698_1750_019988_1750_U01",
+      "DTEEC_009149_1750_009294_1750_U01"
+    ]
+  },
+  "team_dem": {
+    "name": "MSL Gale merged DEM mosaic v3 (1 m)",
+    "team": "Curiosity (MSL) operations team",
+    "citation": "Parker, T.J. and Calef, F.J., MSL Gale merged DEM mosaic v3, 1 m (HiRISE stereo), USGS Astrogeology",
+    "url": "https://planetarymaps.usgs.gov/mosaic/MSL_Gale_DEM_Mosaic_1m_v3.tif",
+    "trek_layer": "Gale_DEM_SMG_1m"
+  },
+  "regional_half_deg": 0.8,
+  "basemap": {
+    "id": "hirise",
+    "name": "HiRISE color mosaic (25 cm)",
+    "url": "https://mars.nasa.gov/mmgis-maps/MSL/Layers/MSL_Gale_HiRISE-LRGB_78quads/{z}/{x}/{y}.png",
+    "tms": true,
+    "min_zoom": 10,
+    "max_native_zoom": 18,
+    "attribution": "HiRISE LRGB mosaic © NASA/JPL-Caltech/UArizona, served by JPL MMGIS"
+  },
+  "context_basemap": {
+    "id": "ctx",
+    "name": "CTX mosaic (6 m)",
+    "url": "https://mars.nasa.gov/mmgis-maps/MSL/Layers/MSL_CTX_ortho_mosaic_6m/{z}/{x}/{y}.png",
+    "tms": true,
+    "min_zoom": 6,
+    "max_native_zoom": 13,
+    "attribution": "CTX mosaic © NASA/JPL-Caltech/MSSS"
+  },
+  "labels": {
+    "id": "labels",
+    "name": "Place names",
+    "url": "https://mars.nasa.gov/mmgis-maps/MSL/Layers/MSL_WebGIS_PlaceText/{z}/{x}/{y}.png",
+    "tms": true,
+    "min_zoom": 4,
+    "max_native_zoom": 17
+  },
+  "texture_zoom": 17,
+  "regional_texture_zoom": 12,
+  "thermal": {
+    "collection": "mo_themis_controlled_mosaics",
+    "item": "mc23_aeolis_nir"
+  },
+  "trek": {
+    "thermal_day": {
+      "layer": "THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018",
+      "level": 9,
+      "ext": "png"
+    }
+  },
+  "geology": {
+    "service": "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Tanaka_et_al_2014_Mars_Global_Map_Features/FeatureServer/3",
+    "map": "Geologic Map of Mars (USGS SIM 3292)",
+    "citation": "Tanaka, K.L., et al., 2014, Geologic map of Mars: U.S. Geological Survey Scientific Investigations Map 3292, scale 1:20,000,000",
+    "scale": "1:20,000,000",
+    "url": "https://doi.org/10.3133/sim3292",
+    "note": "At the global map's scale the whole boxwork site lies in one unit; the CRISM mineral layers show the detail."
+  },
+  "rover": {
+    "waypoints": "https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json",
+    "traverse": "https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_traverse.json",
+    "elev_key": "elev_geoid",
+    "raw_images_mission": "msl",
+    "landing_msd_local": 49269,
+    "extras": []
+  },
+  "habitat": {
+    "name": "Hab-1 “Bradbury Station”",
+    "lon": 137.384238,
+    "lat": -4.797708
+  },
+  "stops": [
+    {
+      "id": "S1",
+      "name": "Hollow Charlie",
+      "kind": "hollow",
+      "lon": 137.38224,
+      "lat": -4.805603,
+      "dwell_min": 25,
+      "tasks": [
+        "Scoop loose fill from the hollow floor",
+        "Trench 10 cm to look for layering",
+        "Panorama of the surrounding ridges"
+      ],
+      "science": "Hollows between boxwork ridges are softer bedrock, partly buried by wind-blown sand. Sample the fill and the bedrock beneath it."
+    },
+    {
+      "id": "S2",
+      "name": "Ridge Alpha",
+      "kind": "ridge",
+      "lon": 137.377026,
+      "lat": -4.805671,
+      "dwell_min": 35,
+      "tasks": [
+        "Hammer sample of the ridge centre-line",
+        "Close-up imaging of the ridge wall",
+        "Core drill (5 cm) if footing is safe"
+      ],
+      "science": "Boxwork ridges are thought to be fractures filled and hardened by minerals from ancient groundwater, left standing when wind eroded the softer rock around them."
+    },
+    {
+      "id": "S3",
+      "name": "Hollow Bravo",
+      "kind": "hollow",
+      "lon": 137.380175,
+      "lat": -4.808336,
+      "dwell_min": 20,
+      "tasks": [
+        "Compare fill with Hollow Charlie",
+        "Collect a contingency sample",
+        "Photograph Curiosity's wheel tracks"
+      ],
+      "science": "A second hollow for comparison; Curiosity drove through this part of the boxwork in 2025."
+    }
+  ],
+  "shelters": [
+    {
+      "id": "PR-2",
+      "name": "Pressurized rover PR-2",
+      "kind": "rover",
+      "lon": 137.380988,
+      "lat": -4.802465,
+      "note": "Parked between the hab and the boxwork. Pressurized cabin with a water-wall storm shelter."
+    }
+  ],
+  "radio": {
+    "habitat_mast_m": 12.0,
+    "suit_antenna_m": 2.0,
+    "relays": []
+  },
+  "skyline_features": [
+    {
+      "name": "Aeolis Mons (Mount Sharp) summit",
+      "lon": 137.85,
+      "lat": -5.08,
+      "note": "about 5.5 km above the crater floor"
+    }
+  ]
+}
