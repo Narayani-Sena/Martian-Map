@@ -94,7 +94,7 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 * **Emergency caches.** Three oxygen caches at the gateways raise the share of the site within 30 minutes of a safe
   haven from 17 % to 72 %.
 * **Skyline fix.** Where am I with no GPS? The helmet's view of the horizon is matched against the terrain model.
-  The median error is 4 m on Gale and 14 m on Jezero's flat floor.
+  The median error is 4 m on Gale and 17 m on Jezero's flat floor.
 * **Fallback card and radio grid.** A printable card for a dead HUD, and grid references ("Kilo seven") to say where
   you are over the radio.
 * **HUD-failure drill.** In the helmet the visor goes dark: no route, beacons or labels, only a paper card with the
@@ -173,7 +173,7 @@ habitat console, in the helmet HUD and on a printed cuff checklist.
 
 ### Two clients
 
-* **Web planner** (React, Leaflet, three.js) for desktop, tablet and phone, in the habitat. A one-minute guided tour
+* **Web planner** (React and Leaflet) for desktop, tablet and phone, in the habitat. A one-minute guided tour
   starts on the first visit (TOUR in the top bar, or `?tour` in the address); on a phone the panels open as sheets
   over the map.
 * **3D console** (Godot 4.7): orbit view for planning, first-person helmet HUD for walking, the moving rover, a
@@ -251,7 +251,8 @@ Each site is one JSON file in `config/sites/`, so a new site is a new file and o
 
 ## Run it
 
-Windows PowerShell, from this folder:
+You need Python 3.11, Node.js 18 or later (only to build the web planner, once), Godot 4.7 for the 3D console,
+and ffmpeg only to record the demo as MP4. On Windows PowerShell, from this folder:
 
 ```powershell
 python -m venv .venv; .venv\Scripts\pip install -r requirements.txt

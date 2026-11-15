@@ -1953,6 +1953,10 @@ func _capture_tour() -> void:
 		await ToolsTour.new(self).run_thennow()
 		get_tree().quit()
 		return
+	if tour == "demo30" or tour == "fulltour":
+		await load("res://scripts/app/%s_tour.gd" % tour).new(self).run()
+		get_tree().quit()
+		return
 	if tour == "trailer":
 		await _trailer()
 		get_tree().quit()

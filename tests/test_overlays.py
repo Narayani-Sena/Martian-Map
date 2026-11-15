@@ -4,6 +4,7 @@ import io
 import time
 
 import pytest
+from fastapi.testclient import TestClient
 from PIL import Image
 
 from server import main
@@ -42,3 +43,10 @@ def test_crism_drape_keeps_its_colours(tmp_path, monkeypatch):
     kind = next(iter(s.crism))
     im = Image.open(io.BytesIO(main._overlay_bytes(SITE, f"crism_{kind}", 512)))
     assert im.mode == "RGBA" and im.getextrema()[3][1] > 0  # some pixels are visible
+
+
+def test_walkback_without_habitat_is_a_client_error():
+    client = TestClient(main.app)
+    for url in (f"/api/sites/{SITE}/overlay/walkback.png?size=256", f"/api/sites/{SITE}/grid/walkback.bin"):
+        r = client.get(url)
+        assert r.status_code == 422 and "hab_lon" in r.text, (url, r.status_code)

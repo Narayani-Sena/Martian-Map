@@ -122,6 +122,7 @@ def test_radar_api_at_jezero():
         assert all(lon0 <= v <= lon1 for v in run["lon"]) and all(lat0 <= v <= lat1 for v in run["lat"])
 
 
+@pytest.mark.skipif(not is_built("gale_boxwork"), reason="site not built")
 def test_gale_has_no_radar():
     d = client.get("/api/sites/gale_boxwork/radar").json()
     assert d["runs"] == [] and "Perseverance" in d["note"]

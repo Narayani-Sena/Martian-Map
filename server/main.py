@@ -793,6 +793,8 @@ def _layer_on_grid(s, layer: str, size: int, q: dict, hab_lon=None, hab_lat=None
         with tree.lock:
             return tree.render(size, min_acc=min_acc) if layer == "ways_home" else tree.data_texture(min(size, 2048))
     if layer == "walkback":
+        if hab_lon is None or hab_lat is None:
+            raise HTTPException(422, "hab_lon/hab_lat required")
         f = s.walkback((hab_lon, hab_lat), _walk_from_query(q))["field"]
         m = _resize(np.where(np.isfinite(f), f / 60.0, 1e6), size)
         idx = np.zeros(m.shape, np.uint8)
@@ -904,6 +906,8 @@ def site_grid(site_id: str, layer: str, hab_lon: float | None = None, hab_lat: f
     q = dict(flat_speed=flat_speed, max_slope=max_slope, caution_slope=caution_slope, max_rough=max_rough,
              sand_penalty=sand_penalty, hazard_aversion=hazard_aversion, load_kg=load_kg)
     if layer == "walkback":
+        if hab_lon is None or hab_lat is None:
+            raise HTTPException(422, "hab_lon/hab_lat required")
         f = s.walkback((hab_lon, hab_lat), _walk_from_query(q))["field"]
         arr, g = np.where(np.isfinite(f), f, -1).astype(np.float32), "grid4"
     elif layer == "comms":
